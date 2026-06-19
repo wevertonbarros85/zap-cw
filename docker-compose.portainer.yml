@@ -1,0 +1,124 @@
+version: "3.8"
+
+# ============================================================
+# Atendechat — Stack para Portainer
+# Frontend : https://zap.cwautomacoes.space  (porta host 3030)
+# Backend  : https://api.zap.cwautomacoes.space (porta host 8088)
+# ============================================================
+
+services:
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: atendechat-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - atendechat_postgres:/var/lib/postgresql/data
+    networks:
+      - atendechat_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: atendechat-redis
+    restart: always
+    command: redis-server --requirepass ${REDIS_PASS}
+    volumes:
+      - atendechat_redis:/data
+    networks:
+      - atendechat_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASS}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: atendechat-backend
+    restart: always
+    environment:
+      NODE_ENV: production
+      BACKEND_URL: ${BACKEND_URL}
+      FRONTEND_URL: ${FRONTEND_URL}
+      PROXY_PORT: 443
+      PORT: 8080
+
+      DB_DIALECT: postgres
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      DB_NAME: ${DB_NAME}
+
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+
+      REDIS_URI: redis://:${REDIS_PASS}@redis:6379
+      REDIS_OPT_LIMITER_MAX: 1
+      REDIS_OPT_LIMITER_DURATION: 3000
+
+      USER_LIMIT: 10000
+      CONNECTIONS_LIMIT: 100000
+      CLOSED_SEND_BY_ME: "true"
+
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_USER: ${MAIL_USER}
+      MAIL_PASS: ${MAIL_PASS}
+      MAIL_FROM: ${MAIL_FROM}
+      MAIL_PORT: ${MAIL_PORT}
+
+      GERENCIANET_SANDBOX: "true"
+    volumes:
+      - atendechat_uploads:/app/public
+      - atendechat_sessions:/app/.wwebjs_auth
+    ports:
+      - "8088:8080"
+    networks:
+      - atendechat_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "npx sequelize db:migrate &&
+             npx sequelize db:seed:all --seeders-path src/database/seeds ||
+             true &&
+             node dist/server.js"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_BACKEND_URL: ${BACKEND_URL}
+        REACT_APP_HOURS_CLOSE_TICKETS_AUTO: "24"
+    container_name: atendechat-frontend
+    restart: always
+    ports:
+      - "3030:80"
+    networks:
+      - atendechat_net
+    depends_on:
+      - backend
+
+volumes:
+  atendechat_postgres:
+  atendechat_redis:
+  atendechat_uploads:
+  atendechat_sessions:
+
+networks:
+  atendechat_net:
+    driver: bridge

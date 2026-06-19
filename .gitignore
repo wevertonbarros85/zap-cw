@@ -1,0 +1,25 @@
+# Variáveis de ambiente com senhas reais
+.env
+backend/.env
+frontend/.env
+.env.portainer
+
+# Dependências
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+
+# Build
+backend/dist/
+frontend/build/
+
+# Uploads e sessões WhatsApp
+backend/public/temp/
+backend/.wwebjs_auth/
+
+# Logs
+*.log
+
+# Sistema
+.DS_Store
+Thumbs.db
