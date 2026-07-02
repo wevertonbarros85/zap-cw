@@ -14,6 +14,8 @@ import SearchIcon from "@material-ui/icons/Search";
 import TextField from "@material-ui/core/TextField";
 import InputAdornment from "@material-ui/core/InputAdornment";
 import CheckCircleIcon from '@material-ui/icons/CheckCircle';
+import Chip from '@material-ui/core/Chip';
+import Box from '@material-ui/core/Box';
 
 import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
 import EditIcon from "@material-ui/icons/Edit";
@@ -30,18 +32,12 @@ import ConfirmationModal from "../../components/ConfirmationModal";
 import toastError from "../../errors/toastError";
 import { Grid } from "@material-ui/core";
 import { isArray } from "lodash";
-import { SocketContext } from "../../context/Socket/SocketContext";
 import { AuthContext } from "../../context/Auth/AuthContext";
-
 
 const reducer = (state, action) => {
   if (action.type === "LOAD_QUICKMESSAGES") {
-    //console.log("aqui");
-    //console.log(action);
-    //console.log(action.payload);
     const quickmessages = action.payload;
     const newQuickmessages = [];
-    //console.log(newQuickmessages);
 
     if (isArray(quickmessages)) {
       quickmessages.forEach((quickemessage) => {
@@ -93,6 +89,10 @@ const useStyles = makeStyles((theme) => ({
     overflowY: "scroll",
     ...theme.scrollbarStyles,
   },
+  mediaChip: {
+    fontSize: '0.75rem',
+    height: 24
+  }
 }));
 
 const Quickemessages = () => {
@@ -107,10 +107,9 @@ const Quickemessages = () => {
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [searchParam, setSearchParam] = useState("");
   const [quickemessages, dispatch] = useReducer(reducer, []);
-  const { user } = useContext(AuthContext);
-  const { profile } = user;
+  const { user, socket } = useContext(AuthContext);
 
-  const socketManager = useContext(SocketContext);
+  const { profile } = user;
 
   useEffect(() => {
     dispatch({ type: "RESET" });
@@ -123,32 +122,31 @@ const Quickemessages = () => {
       fetchQuickemessages();
     }, 500);
     return () => clearTimeout(delayDebounceFn);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParam, pageNumber]);
 
   useEffect(() => {
     const companyId = user.companyId;
-    const socket = socketManager.getSocket(companyId);
 
-    socket.on(`company${companyId}-quickemessage`, (data) => {
+    const onQuickMessageEvent = (data) => {
       if (data.action === "update" || data.action === "create") {
         dispatch({ type: "UPDATE_QUICKMESSAGES", payload: data.record });
       }
       if (data.action === "delete") {
         dispatch({ type: "DELETE_QUICKMESSAGE", payload: +data.id });
       }
-    });
-    return () => {
-      socket.disconnect();
     };
-  }, [socketManager, user.companyId]);
+    socket.on(`company-${companyId}-quickmessage`, onQuickMessageEvent);
+
+    return () => {
+      socket.off(`company-${companyId}-quickmessage`, onQuickMessageEvent);
+    };
+  }, [socket]);
 
   const fetchQuickemessages = async () => {
     try {
       const companyId = user.companyId;
-      //const searchParam = ({ companyId, userId: user.id });
       const { data } = await api.get("/quick-messages", {
-        params: { searchParam, pageNumber, userId: user.id },
+        params: { searchParam, pageNumber },
       });
 
       dispatch({ type: "LOAD_QUICKMESSAGES", payload: data.records });
@@ -167,7 +165,6 @@ const Quickemessages = () => {
   const handleCloseQuickMessageDialog = () => {
     setSelectedQuickemessage(null);
     setQuickMessageDialogOpen(false);
-    //window.location.reload();
     fetchQuickemessages();
   };
 
@@ -176,7 +173,6 @@ const Quickemessages = () => {
   };
 
   const handleEditQuickemessage = (quickemessage) => {
-    //console.log(quickemessage);
     setSelectedQuickemessage(quickemessage);
     setQuickMessageDialogOpen(true);
   };
@@ -193,7 +189,6 @@ const Quickemessages = () => {
     setPageNumber(1);
     fetchQuickemessages();
     dispatch({ type: "RESET" });
-
   };
 
   const loadMore = () => {
@@ -206,6 +201,43 @@ const Quickemessages = () => {
     if (scrollHeight - (scrollTop + 100) < clientHeight) {
       loadMore();
     }
+  };
+
+  const getMediaTypeDisplay = (quickmessage) => {
+    if (!quickmessage.mediaName) {
+      return i18n.t("quickMessages.noAttachment");
+    }
+
+    const mediaType = quickmessage.mediaType || 'document';
+    const getIcon = (type) => {
+      switch (type) {
+        case 'audio': return '🎵';
+        case 'image': return '🖼️';
+        case 'video': return '🎥';
+        default: return '📎';
+      }
+    };
+
+    const getColor = (type) => {
+      switch (type) {
+        case 'audio': return 'secondary';
+        case 'image': return 'primary';
+        case 'video': return 'default';
+        default: return 'default';
+      }
+    };
+
+    return (
+      <Box display="flex" alignItems="center" gap={1}>
+        <span>{getIcon(mediaType)}</span>
+        <Chip 
+          size="small" 
+          label={mediaType} 
+          color={getColor(mediaType)}
+          className={classes.mediaChip}
+        />
+      </Box>
+    );
   };
 
   return (
@@ -276,10 +308,12 @@ const Quickemessages = () => {
               <TableCell align="center">
                 {i18n.t("quickMessages.table.shortcode")}
               </TableCell>
-
               <TableCell align="center">
-                {i18n.t("quickMessages.table.mediaName")}
-              </TableCell>        
+                Mídia
+              </TableCell>
+              <TableCell align="center">
+                {i18n.t("quickMessages.table.status")}
+              </TableCell>
               <TableCell align="center">
                 {i18n.t("quickMessages.table.actions")}
               </TableCell>
@@ -290,9 +324,15 @@ const Quickemessages = () => {
               {quickemessages.map((quickemessage) => (
                 <TableRow key={quickemessage.id}>
                   <TableCell align="center">{quickemessage.shortcode}</TableCell>
-
                   <TableCell align="center">
-                    {quickemessage.mediaName ?? i18n.t("quickMessages.noAttachment")}
+                    {getMediaTypeDisplay(quickemessage)}
+                  </TableCell>
+                  <TableCell align="center">
+                    {quickemessage.geral === true ? (
+                      <CheckCircleIcon style={{ color: 'green' }} />
+                    ) : (
+                      ''
+                    )}
                   </TableCell>
                   <TableCell align="center">
                     <IconButton
@@ -301,7 +341,6 @@ const Quickemessages = () => {
                     >
                       <EditIcon />
                     </IconButton>
-
 
                     <IconButton
                       size="small"
@@ -315,7 +354,7 @@ const Quickemessages = () => {
                   </TableCell>
                 </TableRow>
               ))}
-              {loading && <TableRowSkeleton columns={5} />}
+              {loading && <TableRowSkeleton columns={4} />}
             </>
           </TableBody>
         </Table>

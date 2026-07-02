@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -12,13 +12,15 @@ import { Bar } from 'react-chartjs-2';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import brLocale from 'date-fns/locale/pt-BR';
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
-import { Button, Stack, TextField } from '@mui/material';
+import { Button, Grid, TextField } from '@material-ui/core';
 import Typography from "@material-ui/core/Typography";
 import api from '../../services/api';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import './button.css';
 import { i18n } from '../../translate/i18n';
+import { AuthContext } from "../../context/Auth/AuthContext";
+import {  useTheme } from '@material-ui/core';
 
 ChartJS.register(
     CategoryScale,
@@ -38,7 +40,7 @@ export const options = {
         },
         title: {
             display: true,
-            text: i18n.t("dashboard.charts.date.label"),
+            text: 'Tickets',
             position: 'left',
         },
         datalabels: {
@@ -59,16 +61,19 @@ export const options = {
 };
 
 export const ChartsDate = () => {
-
+    const theme = useTheme();
     const [initialDate, setInitialDate] = useState(new Date());
     const [finalDate, setFinalDate] = useState(new Date());
     const [ticketsData, setTicketsData] = useState({ data: [], count: 0 });
+    const { user } = useContext(AuthContext);
 
-    const companyId = localStorage.getItem("companyId");
+    const companyId = user.companyId;
 
     useEffect(() => {
-        handleGetTicketsInformation();
-    }, []);
+        if (companyId) {
+            handleGetTicketsInformation();
+        }
+    }, [companyId]);
 
     const dataCharts = {
 
@@ -79,7 +84,7 @@ export const ChartsDate = () => {
                 data: ticketsData?.data.length > 0 && ticketsData?.data.map((item, index) => {
                     return item.total
                 }),
-                backgroundColor: '#2DDD7F',
+                backgroundColor: theme.palette.primary.main,
             },
         ],
     };
@@ -89,42 +94,42 @@ export const ChartsDate = () => {
             const { data } = await api.get(`/dashboard/ticketsDay?initialDate=${format(initialDate, 'yyyy-MM-dd')}&finalDate=${format(finalDate, 'yyyy-MM-dd')}&companyId=${companyId}`);
             setTicketsData(data);
         } catch (error) {
-            toast.error(i18n.t("dashboard.toasts.dateChartError"));
+            toast.error('Erro ao buscar informações dos tickets');
         }
     }
 
     return (
         <>
             <Typography component="h2" variant="h6" color="primary" gutterBottom>
-                {i18n.t("dashboard.charts.date.title")} ({ticketsData?.count})
+                {i18n.t("dashboard.users.totalAttendances")} ({ticketsData?.count})
             </Typography>
 
-            <Stack direction={'row'} spacing={2} alignItems={'center'} sx={{ my: 2, }} >
+            <Grid container spacing={2}>
+                <Grid item>
+                    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={brLocale}>
+                        <DatePicker
+                            value={initialDate}
+                            onChange={(newValue) => { setInitialDate(newValue) }}
+                            label={i18n.t("dashboard.date.initialDate")}
+                            renderInput={(params) => <TextField fullWidth {...params} sx={{ width: '20ch' }} />}
 
-                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={brLocale}>
-                    <DatePicker
-                        value={initialDate}
-                        onChange={(newValue) => { setInitialDate(newValue) }}
-                        label={i18n.t("dashboard.charts.date.start")}
-                        renderInput={(params) => <TextField fullWidth {...params} sx={{ width: '20ch' }} />}
-
-                    />
-                </LocalizationProvider>
-
-                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={brLocale}>
-                    <DatePicker
-                        value={finalDate}
-                        onChange={(newValue) => { setFinalDate(newValue) }}
-                        label={i18n.t("dashboard.charts.date.end")}
-                        renderInput={(params) => <TextField fullWidth {...params} sx={{ width: '20ch' }} />}
-                    />
-                </LocalizationProvider>
-
-                <Button className="buttonHover" onClick={handleGetTicketsInformation} variant='contained' >
-                    {i18n.t("dashboard.charts.date.filter")}
-                </Button>
-
-            </Stack>
+                        />
+                    </LocalizationProvider>
+                </Grid>
+                <Grid item>
+                    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={brLocale}>
+                        <DatePicker
+                            value={finalDate}
+                            onChange={(newValue) => { setFinalDate(newValue) }}
+                            label={i18n.t("dashboard.date.finalDate")}
+                            renderInput={(params) => <TextField fullWidth {...params} sx={{ width: '20ch' }} />}
+                        />
+                    </LocalizationProvider>
+                </Grid>
+                <Grid item>
+                    <Button style={{ backgroundColor: theme.palette.primary.main, top: '10px' }} onClick={handleGetTicketsInformation} variant='contained'>Filtrar</Button>
+                </Grid>
+            </Grid>
             <Bar options={options} data={dataCharts} style={{ maxWidth: '100%', maxHeight: '280px', }} />
         </>
     );

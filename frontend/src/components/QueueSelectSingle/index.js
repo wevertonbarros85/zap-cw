@@ -16,7 +16,7 @@ const useStyles = makeStyles(theme => ({
     },
 }));
 
-const QueueSelectSingle = (touched, errors) => {
+const QueueSelectSingle = () => {
     const classes = useStyles();
     const [queues, setQueues] = useState([]);
 
@@ -49,8 +49,6 @@ const QueueSelectSingle = (touched, errors) => {
                         name="queueId"
                         labelId="queue-selection-label"
                         id="queue-selection"
-                        error={touched.queueId && Boolean(errors.queueId)}
-                        helpertext={touched.name && errors.name}
                         fullWidth
                     >
                         {queues.map(queue => (

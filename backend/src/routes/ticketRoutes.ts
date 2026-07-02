@@ -9,7 +9,23 @@ ticketRoutes.get("/tickets", isAuth, TicketController.index);
 
 ticketRoutes.get("/tickets/:ticketId", isAuth, TicketController.show);
 
+ticketRoutes.post(
+  "/tickets/:ticketId/trigger-flow",
+  isAuth,
+  TicketController.triggerFlow
+);
+
+ticketRoutes.get("/tickets-log/:ticketId", isAuth, TicketController.showLog);
+
 ticketRoutes.get("/ticket/kanban", isAuth, TicketController.kanban);
+
+ticketRoutes.get("/ticketreport/reports", isAuth, TicketController.report);
+
+ticketRoutes.get(
+  "/ticketreport/vendas",
+  isAuth,
+  TicketController.relatorioVendas
+);
 
 ticketRoutes.get("/tickets/u/:uuid", isAuth, TicketController.showFromUUID);
 
@@ -18,5 +34,13 @@ ticketRoutes.post("/tickets", isAuth, TicketController.store);
 ticketRoutes.put("/tickets/:ticketId", isAuth, TicketController.update);
 
 ticketRoutes.delete("/tickets/:ticketId", isAuth, TicketController.remove);
+
+ticketRoutes.post("/tickets/closeAll", isAuth, TicketController.closeAll);
+
+ticketRoutes.post(
+  "/transfer-tickets",
+  isAuth,
+  TicketController.transferTickets
+);
 
 export default ticketRoutes;

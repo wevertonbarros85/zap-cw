@@ -14,11 +14,11 @@ module.exports = {
         primaryKey: true
       },
       contacts: {
-        type: DataTypes.TEXT,
+        type: DataTypes.JSONB,
         allowNull: true
       },
       chats: {
-        type: DataTypes.TEXT,
+        type: DataTypes.JSONB,
         allowNull: true
       },
       createdAt: {

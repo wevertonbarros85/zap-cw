@@ -1,24 +1,79 @@
+// src/services/UserServices/ShowUserService.ts - ATUALIZADO COM NOVA COLUNA
 import User from "../../models/User";
 import AppError from "../../errors/AppError";
 import Queue from "../../models/Queue";
 import Company from "../../models/Company";
+import Plan from "../../models/Plan";
 
-const ShowUserService = async (id: string | number): Promise<User> => {
-  const user = await User.findByPk(id, {
+const ShowUserService = async (
+  id: string | number,
+  companyId: string | number
+): Promise<User> => {
+  const user = await User.findOne({
+    where: {
+      id,
+      companyId
+    },
     attributes: [
-      "name",
       "id",
+      "name",
       "email",
-      "companyId",
       "profile",
+      "profileImage",
       "super",
-      "tokenVersion",
       "whatsappId",
-	    "allTicket"
+      "online",
+      "startWork",
+      "endWork",
+      "allTicket",
+      "companyId",
+      "tokenVersion",
+      "defaultTheme",
+      "allowGroup",
+      "defaultMenu",
+      "farewellMessage",
+      "userClosePendingTicket",
+      "showDashboard",
+      "defaultTicketsManagerWidth",
+      "allUserChat",
+      "allHistoric",
+      "allowRealTime",
+      "allowConnections",
+      "showContacts",
+      "showCampaign",
+      "showFlow",
+      "finalizacaoComValorVendaAtiva",
+      "birthDate",
+      "allowSeeMessagesInPendingTickets" // 🆕 INCLUIR NO ATTRIBUTES
     ],
     include: [
       { model: Queue, as: "queues", attributes: ["id", "name", "color"] },
-      { model: Company, as: "company", attributes: ["id", "name"] }
+      {
+        model: Company,
+        as: "company",
+        attributes: ["id", "name", "dueDate", "document"],
+        include: [
+          {
+            model: Plan,
+            as: "plan",
+            attributes: [
+              "id",
+              "name",
+              "amount",
+              "useWhatsapp",
+              "useFacebook",
+              "useInstagram",
+              "useCampaigns",
+              "useSchedules",
+              "useInternalChat",
+              "useExternalApi",
+              "useIntegrations",
+              "useOpenAi",
+              "useKanban"
+            ]
+          }
+        ]
+      }
     ]
   });
 

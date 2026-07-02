@@ -1,11 +1,12 @@
 import { Sequelize, Op, Filterable } from "sequelize";
 import QuickMessage from "../../models/QuickMessage";
-
+import QuickMessageComponent from "../../models/QuickMessageComponent";
 interface Request {
   searchParam?: string;
   pageNumber?: string;
   companyId: number | string;
   userId?: number | string;
+  isOficial?: boolean;
 }
 
 interface Response {
@@ -18,7 +19,8 @@ const ListService = async ({
   searchParam = "",
   pageNumber = "1",
   companyId,
-  userId
+  userId,
+  isOficial = false
 }: Request): Promise<Response> => {
   const sanitizedSearchParam = searchParam.toLocaleLowerCase().trim();
 
@@ -40,16 +42,37 @@ const ListService = async ({
     //   }
     // ]
   };
+
   whereCondition = {
-  ...whereCondition,
-  companyId,
-  userId: userId
-  }
+    ...whereCondition,
+    companyId,
+    [Op.or]: [
+      {
+        visao: true // Se "visao" é verdadeiro, todas as mensagens são visíveis
+      },
+      {
+        userId // Se "visao" é falso, apenas as mensagens do usuário atual são visíveis
+      }
+    ]
+  };
+
+  whereCondition = {
+    ...whereCondition,
+    isOficial: isOficial ? { [Op.or]: [true, false] } : false
+  };
+
   const limit = 20;
   const offset = limit * (+pageNumber - 1);
 
   const { count, rows: records } = await QuickMessage.findAndCountAll({
     where: whereCondition,
+    include: [
+      {
+        model: QuickMessageComponent,
+        as: "components",
+        attributes: ["id", "quickMessageId", "type", "text"]
+      }
+    ],
     limit,
     offset,
     order: [["shortcode", "ASC"]]

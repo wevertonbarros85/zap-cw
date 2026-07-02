@@ -3,20 +3,37 @@ import AppError from "../../errors/AppError";
 import Campaign from "../../models/Campaign";
 import ContactList from "../../models/ContactList";
 import Whatsapp from "../../models/Whatsapp";
+import User from "../../models/User";
+import Queue from "../../models/Queue";
 
 interface Data {
   name: string;
   status: string;
+  confirmation: boolean;
   scheduledAt: string;
   companyId: number;
   contactListId: number;
-  tagId: number | null;
   message1?: string;
   message2?: string;
   message3?: string;
   message4?: string;
   message5?: string;
-  fileListId: number;
+  confirmationMessage1?: string;
+  confirmationMessage2?: string;
+  confirmationMessage3?: string;
+  confirmationMessage4?: string;
+  confirmationMessage5?: string;
+  userId: number | string;
+  queueId: number | string;
+  statusTicket: string;
+  openTicket: string;
+  isRecurring?: boolean;
+  recurrenceType?: string;
+  recurrenceInterval?: number;
+  recurrenceDaysOfWeek?: string;
+  recurrenceDayOfMonth?: number;
+  recurrenceEndDate?: string;
+  maxExecutions?: number;
 }
 
 const CreateService = async (data: Data): Promise<Campaign> => {
@@ -43,8 +60,10 @@ const CreateService = async (data: Data): Promise<Campaign> => {
   await record.reload({
     include: [
       { model: ContactList },
-      { model: Whatsapp, attributes: ["id", "name"] }
-    ]
+      { model: Whatsapp, attributes: ["id", "name", "color"] },
+      { model: User, attributes: ["id", "name"] },
+      { model: Queue, attributes: ["id", "name", "color"] },
+        ]
   });
 
   return record;

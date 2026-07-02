@@ -14,19 +14,52 @@ interface WhatsappData {
   greetingMessage?: string;
   complationMessage?: string;
   outOfHoursMessage?: string;
-  ratingMessage?: string;
   queueIds?: number[];
   token?: string;
-  //sendIdQueue?: number;
-  //timeSendQueue?: number;
-  transferQueueId?: number; 
-  timeToTransfer?: number;    
-  promptId?: number;
   maxUseBotQueues?: number;
-  timeUseBotQueues?: number;
-  expiresTicket?: number;
+  timeUseBotQueues?: string;
+  expiresTicket?: string;
+  allowGroup?: boolean;
+  sendIdQueue?: number;
+  timeSendQueue?: number;
+  timeInactiveMessage?: string;
+  inactiveMessage?: string;
+  ratingMessage?: string;
+  maxUseBotQueuesNPS?: number;
+  expiresTicketNPS?: number;
+  whenExpiresTicket?: string;
   expiresInactiveMessage?: string;
-
+  groupAsTicket?: string;
+  importOldMessages?: string;
+  importRecentMessages?: string;
+  importOldMessagesGroups?: boolean;
+  closedTicketsPostImported?: boolean;
+  timeCreateNewTicket?: number;
+  integrationId?: number;
+  integrationTypeId?: number;
+  schedules?: any[];
+  promptId?: number;
+  requestQR?: boolean;
+  collectiveVacationMessage?: string;
+  collectiveVacationStart?: string;
+  collectiveVacationEnd?: string;
+  queueIdImportMessages?: number;
+  phone_number_id?: string;
+  waba_id?: string;
+  send_token?: string;
+  business_id?: string;
+  phone_number?: string;
+  flowIdNotPhrase?: number;
+  flowIdWelcome?: number;
+  flowIdInactiveTime?: number;
+  flowInactiveTime?: number;
+  maxUseInactiveTime?: number;
+  color?: string;
+  timeToReturnQueue?: number;
+  timeAwaitActiveFlowId?: number;
+  timeAwaitActiveFlow?: number;
+  triggerIntegrationOnClose?: boolean;
+  wavoip?: string;
 }
 
 interface Request {
@@ -59,18 +92,52 @@ const UpdateWhatsAppService = async ({
     greetingMessage,
     complationMessage,
     outOfHoursMessage,
-    ratingMessage,
     queueIds = [],
     token,
-    //timeSendQueue,
-    //sendIdQueue = null,
-    transferQueueId,	
-	timeToTransfer,	
+    maxUseBotQueues = 0,
+    timeUseBotQueues = 0,
+    expiresTicket = 0,
+    allowGroup,
+    timeSendQueue = 0,
+    sendIdQueue = null,
+    timeInactiveMessage = 0,
+    inactiveMessage,
+    ratingMessage,
+    maxUseBotQueuesNPS,
+    expiresTicketNPS = 0,
+    whenExpiresTicket,
+    expiresInactiveMessage,
+    groupAsTicket,
+    importOldMessages,
+    importRecentMessages,
+    closedTicketsPostImported,
+    importOldMessagesGroups,
+    timeCreateNewTicket = null,
+    integrationId,
+    integrationTypeId,
+    schedules,
     promptId,
-    maxUseBotQueues,
-    timeUseBotQueues,
-    expiresTicket,
-    expiresInactiveMessage
+    requestQR = false,
+    collectiveVacationEnd,
+    collectiveVacationMessage,
+    collectiveVacationStart,
+    queueIdImportMessages,
+    flowIdNotPhrase,
+    flowIdWelcome,
+    flowIdInactiveTime,
+    flowInactiveTime,
+    maxUseInactiveTime,
+    color,
+    phone_number_id,
+    waba_id,
+    send_token,
+    business_id,
+    phone_number,
+    timeToReturnQueue = 0,
+    timeAwaitActiveFlowId,
+    timeAwaitActiveFlow = 0,
+    triggerIntegrationOnClose,
+    wavoip
   } = whatsappData;
 
   try {
@@ -97,8 +164,15 @@ const UpdateWhatsAppService = async ({
       await oldDefaultWhatsapp.update({ isDefault: false });
     }
   }
-
+  // console.log("GETTING WHATSAPP SHOW WHATSAPP 1", whatsappId, companyId)
   const whatsapp = await ShowWhatsAppService(whatsappId, companyId);
+
+  // DEBUG - Log dos dados antes da atualização
+  console.log(`[WHATSAPP-SERVICE] Atualizando conexão ${whatsappId} com:`, {
+    flowIdNotPhrase: flowIdNotPhrase,
+    flowIdWelcome: flowIdWelcome,
+    flowIdInactiveTime: flowIdInactiveTime
+  });
 
   await whatsapp.update({
     name,
@@ -107,22 +181,57 @@ const UpdateWhatsAppService = async ({
     greetingMessage,
     complationMessage,
     outOfHoursMessage,
-    ratingMessage,
     isDefault,
     companyId,
     token,
-    //timeSendQueue,
-    //sendIdQueue,
-    transferQueueId,	
-	timeToTransfer,	
-    promptId,
-    maxUseBotQueues,
-    timeUseBotQueues,
-    expiresTicket,
-    expiresInactiveMessage
+    maxUseBotQueues: maxUseBotQueues || 0,
+    timeUseBotQueues: timeUseBotQueues || 0,
+    expiresTicket: expiresTicket || 0,
+    allowGroup,
+    timeSendQueue,
+    sendIdQueue,
+    timeInactiveMessage,
+    inactiveMessage,
+    ratingMessage,
+    maxUseBotQueuesNPS,
+    expiresTicketNPS,
+    whenExpiresTicket,
+    expiresInactiveMessage,
+    groupAsTicket,
+    importOldMessages,
+    importRecentMessages,
+    closedTicketsPostImported,
+    importOldMessagesGroups,
+    timeCreateNewTicket,
+    integrationId: integrationId || null,
+    integrationTypeId,
+    schedules,
+    promptId: promptId || null,
+    collectiveVacationEnd,
+    collectiveVacationMessage,
+    collectiveVacationStart,
+    queueIdImportMessages,
+    flowIdNotPhrase: flowIdNotPhrase || null,
+    flowIdWelcome: flowIdWelcome || null,
+    flowIdInactiveTime: flowIdInactiveTime || null,
+    flowInactiveTime,
+    maxUseInactiveTime,
+    color,
+    phone_number_id,
+    waba_id,
+    send_token,
+    business_id,
+    phone_number,
+    timeToReturnQueue,
+    timeAwaitActiveFlowId,
+    timeAwaitActiveFlow,
+    triggerIntegrationOnClose,
+    wavoip
   });
 
-  await AssociateWhatsappQueue(whatsapp, queueIds);
+  if (!requestQR) {
+    await AssociateWhatsappQueue(whatsapp, queueIds);
+  }
 
   return { whatsapp, oldDefaultWhatsapp };
 };

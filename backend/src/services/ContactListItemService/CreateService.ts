@@ -1,7 +1,7 @@
 import * as Yup from "yup";
 import AppError from "../../errors/AppError";
 import ContactListItem from "../../models/ContactListItem";
-import { logger } from "../../utils/logger";
+import logger from "../../utils/logger";
 import CheckContactNumber from "../WbotServices/CheckNumber";
 
 interface Data {
@@ -37,9 +37,9 @@ const CreateService = async (data: Data): Promise<ContactListItem> => {
   });
 
   try {
-    const response = await CheckContactNumber(record.number, record.companyId);
-    record.isWhatsappValid = response.exists;
-    const number = response.jid.replace(/\D/g, "");
+    const response: any = await CheckContactNumber(record.number, record.companyId);
+    record.isWhatsappValid = response ? true : false;
+    const number = response.jid.split("@")[0];
     record.number = number;
     await record.save();
   } catch (e) {

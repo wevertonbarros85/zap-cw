@@ -1,6 +1,7 @@
 import Setting from "../models/Setting";
 import AppError from "../errors/AppError";
 
+//será usado por agora somente para userCreation
 const CheckSettings = async (key: string): Promise<string> => {
   const setting = await Setting.findOne({
     where: { key }

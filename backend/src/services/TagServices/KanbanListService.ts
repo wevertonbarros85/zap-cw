@@ -18,6 +18,7 @@ const KanbanListService = async ({
     order: [["id", "ASC"]],
     raw: true,
   });
+  //console.log(tags);
   return tags;
 };
 

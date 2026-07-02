@@ -11,7 +11,6 @@ const {
     useAddressForPaymentDetails,
     nameOnCard,
     cardNumber,
-    invoiceId,
     cvv
   }
 } = checkoutFormModel;
@@ -27,6 +26,5 @@ export default {
   [useAddressForPaymentDetails.name]: false,
   [nameOnCard.name]: '',
   [cardNumber.name]: '',
-  [invoiceId.name]: '',
   [cvv.name]: ''
 };

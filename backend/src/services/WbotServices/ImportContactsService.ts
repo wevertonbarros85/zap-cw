@@ -2,7 +2,7 @@ import * as Sentry from "@sentry/node";
 import GetDefaultWhatsApp from "../../helpers/GetDefaultWhatsApp";
 import { getWbot } from "../../libs/wbot";
 import Contact from "../../models/Contact";
-import { logger } from "../../utils/logger";
+import logger from "../../utils/logger";
 import ShowBaileysService from "../BaileysServices/ShowBaileysService";
 import CreateContactService from "../ContactServices/CreateContactService";
 import { isString, isArray } from "lodash";
@@ -11,7 +11,7 @@ import fs from 'fs';
 
 const ImportContactsService = async (companyId: number): Promise<void> => {
   const defaultWhatsapp = await GetDefaultWhatsApp(companyId);
-  const wbot = getWbot(defaultWhatsapp.id);
+  const wbot = await getWbot(defaultWhatsapp.id);
 
   let phoneContacts;
 
@@ -20,13 +20,13 @@ const ImportContactsService = async (companyId: number): Promise<void> => {
     phoneContacts = JSON.parse(JSON.stringify(contactsString.contacts));
 
     const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
-    const beforeFilePath = path.join(publicFolder, 'contatos_antes.txt');
+    const beforeFilePath = path.join(publicFolder,`company${companyId}`, 'contatos_antes.txt');
     fs.writeFile(beforeFilePath, JSON.stringify(phoneContacts, null, 2), (err) => {
       if (err) {
         logger.error(`Failed to write contacts to file: ${err}`);
         throw err;
       }
-      console.log('O arquivo contatos_antes.txt foi criado!');
+      // console.log('O arquivo contatos_antes.txt foi criado!');
     });
 
   } catch (err) {
@@ -35,12 +35,13 @@ const ImportContactsService = async (companyId: number): Promise<void> => {
   }
 
   const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
-  const afterFilePath = path.join(publicFolder, 'contatos_depois.txt');
+  const afterFilePath = path.join(publicFolder,`company${companyId}`, 'contatos_depois.txt');
   fs.writeFile(afterFilePath, JSON.stringify(phoneContacts, null, 2), (err) => {
     if (err) {
       logger.error(`Failed to write contacts to file: ${err}`);
       throw err;
     }
+    // console.log('O arquivo contatos_depois.txt foi criado!');
   });
 
   const phoneContactsList = isString(phoneContacts)

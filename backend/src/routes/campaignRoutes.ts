@@ -8,34 +8,19 @@ import uploadConfig from "../config/upload";
 const upload = multer(uploadConfig);
 
 const routes = express.Router();
-
+routes.get("/campaigns/:id/recurrence-preview", isAuth, CampaignController.previewRecurrence);
+routes.post("/campaigns/:id/stop-recurrence", isAuth, CampaignController.stopRecurrence);
 routes.get("/campaigns/list", isAuth, CampaignController.findList);
-
 routes.get("/campaigns", isAuth, CampaignController.index);
-
 routes.get("/campaigns/:id", isAuth, CampaignController.show);
-
+routes.get("/campaigns/:id/shipping", isAuth, CampaignController.getShipping);
+routes.get("/campaigns/:id/stats", isAuth, CampaignController.getStats);
 routes.post("/campaigns", isAuth, CampaignController.store);
-
 routes.put("/campaigns/:id", isAuth, CampaignController.update);
-
 routes.delete("/campaigns/:id", isAuth, CampaignController.remove);
-
 routes.post("/campaigns/:id/cancel", isAuth, CampaignController.cancel);
-
 routes.post("/campaigns/:id/restart", isAuth, CampaignController.restart);
-
-routes.post(
-  "/campaigns/:id/media-upload",
-  isAuth,
-  upload.array("file"),
-  CampaignController.mediaUpload
-);
-
-routes.delete(
-  "/campaigns/:id/media-upload",
-  isAuth,
-  CampaignController.deleteMedia
-);
+routes.post("/campaigns/:id/media-upload", isAuth, upload.array("file"), CampaignController.mediaUpload);
+routes.delete("/campaigns/:id/media-upload", isAuth, CampaignController.deleteMedia);
 
 export default routes;

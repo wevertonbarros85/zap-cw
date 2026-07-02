@@ -4,6 +4,7 @@ import CreateQueueIntegrationService from "../services/QueueIntegrationServices/
 import DeleteQueueIntegrationService from "../services/QueueIntegrationServices/DeleteQueueIntegrationService";
 import ListQueueIntegrationService from "../services/QueueIntegrationServices/ListQueueIntegrationService";
 import ShowQueueIntegrationService from "../services/QueueIntegrationServices/ShowQueueIntegrationService";
+import TestSessionIntegrationService from "../services/QueueIntegrationServices/TestSessionDialogflowService";
 import UpdateQueueIntegrationService from "../services/QueueIntegrationServices/UpdateQueueIntegrationService";
 
 type IndexQuery = {
@@ -30,6 +31,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     typebotKeywordFinish,
     typebotSlug,
     typebotUnknownMessage,
+    typebotDelayMessage,
     typebotKeywordRestart,
     typebotRestartMessage } = req.body;
   const { companyId } = req.user;
@@ -39,12 +41,14 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     typebotKeywordFinish,
     typebotSlug,
     typebotUnknownMessage,
+    typebotDelayMessage,
     typebotKeywordRestart,
-    typebotRestartMessage
+    typebotRestartMessage 
   });
 
   const io = getIO();
-  io.to(`company-${companyId}-mainchannel`).emit(`company-${companyId}-queueIntegration`, {
+  io.of(String(companyId))
+  .emit(`company-${companyId}-queueIntegration`, {
     action: "create",
     queueIntegration
   });
@@ -72,7 +76,8 @@ export const update = async (
   const queueIntegration = await UpdateQueueIntegrationService({ integrationData, integrationId, companyId });
 
   const io = getIO();
-  io.to(`company-${companyId}-mainchannel`).emit(`company-${companyId}-queueIntegration`, {
+  io.of(String(companyId))
+  .emit(`company-${companyId}-queueIntegration`, {
     action: "update",
     queueIntegration
   });
@@ -90,10 +95,27 @@ export const remove = async (
   await DeleteQueueIntegrationService(integrationId);
 
   const io = getIO();
-  io.to(`company-${companyId}-mainchannel`).emit(`company-${companyId}-queueIntegration`, {
+  io.of(String(companyId))
+  .emit(`company-${companyId}-queueIntegration`, {
     action: "delete",
     integrationId: +integrationId
   });
 
   return res.status(200).send();
+};
+
+export const testSession = async (req: Request, res: Response): Promise<Response> => {
+  const { projectName, jsonContent, language } = req.body;
+  const { companyId } = req.user;
+
+  const response = await TestSessionIntegrationService({ projectName, jsonContent, language });
+
+  const io = getIO();
+  io.of(String(companyId))
+  .emit(`company-${companyId}-queueIntegration`, {
+    action: "testSession",
+    response
+  });
+
+  return res.status(200).json(response);
 };

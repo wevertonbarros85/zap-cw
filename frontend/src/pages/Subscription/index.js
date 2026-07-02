@@ -1,4 +1,4 @@
-import React, { useState, useContext } from "react";
+import React, { useState, useContext, useEffect } from "react";
 import { makeStyles } from "@material-ui/core/styles";
 
 import Paper from "@material-ui/core/Paper";
@@ -10,9 +10,10 @@ import SubscriptionModal from "../../components/SubscriptionModal";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
 import MainContainer from "../../components/MainContainer";
+import moment from "moment";
+import { useDate } from "../../hooks/useDate";
 
 import { AuthContext } from "../../context/Auth/AuthContext";
-import { i18n } from "../../translate/i18n";
 
 const useStyles = makeStyles((theme) => ({
   mainPaper: {
@@ -23,25 +24,17 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-const _formatDate = (date) => {
-  const now = new Date();
-  const past = new Date(date);
-  const diff = Math.abs(now.getTime() - past.getTime());
-  const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
-
-  return days;
-}
-
 const Contacts = () => {
   const classes = useStyles();
-  const { user } = useContext(AuthContext);
+  const { user, socket } = useContext(AuthContext);
 
   const [loading,] = useState(false);
   const [, setPageNumber] = useState(1);
   const [selectedContactId, setSelectedContactId] = useState(null);
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [hasMore,] = useState(false);
-
+  const [dueDate, setDueDate] = useState("");
+  const { returnDays } = useDate();
 
   const handleOpenContactModal = () => {
     setSelectedContactId(null);
@@ -65,6 +58,13 @@ const Contacts = () => {
     }
   };
 
+  useEffect(() => {
+    const currentDueDate = localStorage.getItem("dueDate");
+    if (currentDueDate !== "" && currentDueDate !== "null") {
+      setDueDate(moment(currentDueDate).format("DD/MM/YYYY"));
+    }
+  }, []);
+
   return (
     <MainContainer className={classes.mainContainer}>
       <SubscriptionModal
@@ -75,7 +75,7 @@ const Contacts = () => {
       ></SubscriptionModal>
 
       <MainHeader>
-        <Title>{i18n.t("subscription.title")}</Title>
+        <Title>Assinatura</Title>
       </MainHeader>
       <Grid item xs={12} sm={4}>
         <Paper
@@ -87,16 +87,13 @@ const Contacts = () => {
           <div>
             <TextField
               id="outlined-full-width"
-              label={i18n.t("subscription.testPeriod")}
-              defaultValue={`${i18n.t("subscription.remainingTest")} ${_formatDate(user?.company?.trialExpiration)} ${i18n.t("subscription.remainingTest2")}`}
+              label="Período de Licença"
+              // defaultValue={`Sua licença vence em ${returnDays(user?.company?.dueDate)} dias!`}
+              defaultValue={returnDays(user?.company?.dueDate) === 0 ? `Sua licença vence em hoje!` : `Sua licença vence em ${returnDays(user?.company?.dueDate)} dias!`}
               fullWidth
               margin="normal"
-              InputLabelProps={{
-                shrink: true,
-              }}
-              InputProps={{
-                readOnly: true,
-              }}
+              InputLabelProps={{ shrink: true, }}
+              InputProps={{ readOnly: true, }}
               variant="outlined"
             />
 
@@ -105,8 +102,8 @@ const Contacts = () => {
           <div>
             <TextField
               id="outlined-full-width"
-              label={i18n.t("subscription.chargeEmail")}
-              defaultValue={user?.company?.email}
+              label="Email de cobrança"
+              defaultValue={user?.email}
               fullWidth
               margin="normal"
               InputLabelProps={{
@@ -127,7 +124,7 @@ const Contacts = () => {
               onClick={handleOpenContactModal}
               fullWidth
             >
-              {i18n.t("subscription.signNow")}
+              Assine Agora!
             </Button>
           </div>
 

@@ -1,7 +1,6 @@
 import { Op } from "sequelize";
 import Prompt from "../../models/Prompt";
 import Queue from "../../models/Queue";
-import { logger } from "../../utils/logger";
 
 interface Request {
   searchParam?: string;
@@ -32,8 +31,6 @@ const ListPromptsService = async ({
     }
   }
 
-  logger.info(whereCondition);
-
   const { count, rows: prompts } = await Prompt.findAndCountAll({
     where: { ...whereCondition, companyId },
     include: [
@@ -48,8 +45,6 @@ const ListPromptsService = async ({
     order: [["name", "ASC"]],
   });
   const hasMore = count > offset + prompts.length;
-
-  logger.info(prompts);
 
   return {
     prompts,

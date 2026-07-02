@@ -10,14 +10,12 @@ import {
 import { toast } from "react-toastify";
 
 import {
-    Box,
     Button,
     CircularProgress,
     Dialog,
     DialogActions,
     DialogContent,
     DialogTitle,
-    Divider,
     Grid,
     makeStyles,
     TextField
@@ -82,23 +80,24 @@ const useStyles = makeStyles(theme => ({
 
 const FileListSchema = Yup.object().shape({
     name: Yup.string()
-        .min(3, i18n.t("fileModal.formErrors.name.short"))
-        .required(i18n.t("fileModal.formErrors.name.required")),
+        .min(3, "nome muito curto")
+        .required("Obrigatório"),
     message: Yup.string()
-        .required(i18n.t("fileModal.formErrors.message.required"))
+        .required("Obrigatório")
 });
 
 const FilesModal = ({ open, onClose, fileListId, reload }) => {
     const classes = useStyles();
     const { user } = useContext(AuthContext);
-    const [ files, setFiles ] = useState([]);
+
+    const [files, setFiles] = useState([]);
     const [selectedFileNames, setSelectedFileNames] = useState([]);
 
 
     const initialState = {
         name: "",
         message: "",
-        options: [{ name: "", path:"", mediaType:"" }],
+        options: [{ name: "", path: "", mediaType: "" }],
     };
 
     const [fileList, setFileList] = useState(initialState);
@@ -125,35 +124,35 @@ const FilesModal = ({ open, onClose, fileListId, reload }) => {
     const handleSaveFileList = async (values) => {
 
         const uploadFiles = async (options, filesOptions, id) => {
-                const formData = new FormData();
-                formData.append("fileId", id);
-                formData.append("typeArch", "fileList")
-                filesOptions.forEach((fileOption, index) => {
-                    if (fileOption.file) {
-                        formData.append("files", fileOption.file);
-                        formData.append("mediaType", fileOption.file.type)
-                        formData.append("name", options[index].name);
-                        formData.append("id", options[index].id);
-                    }
-                });
-      
-              try {
+            const formData = new FormData();
+            formData.append("fileId", id);
+            formData.append("typeArch", "fileList")
+            filesOptions.forEach((fileOption, index) => {
+                if (fileOption.file) {
+                    formData.append("files", fileOption.file);
+                    formData.append("mediaType", fileOption.file.type)
+                    formData.append("name", options[index].name);
+                    formData.append("id", options[index].id);
+                }
+            });
+
+            try {
                 const { data } = await api.post(`/files/uploadList/${id}`, formData);
                 setFiles([]);
                 return data;
-              } catch (err) {
+            } catch (err) {
                 toastError(err);
-              }
+            }
             return null;
         }
 
         const fileData = { ...values, userId: user.id };
-        
+
         try {
             if (fileListId) {
                 const { data } = await api.put(`/files/${fileListId}`, fileData)
                 if (data.options.length > 0)
-
+                    // console.log(values.options)
                     uploadFiles(data.options, values.options, fileListId)
             } else {
                 const { data } = await api.post("/files", fileData);
@@ -163,7 +162,7 @@ const FilesModal = ({ open, onClose, fileListId, reload }) => {
             toast.success(i18n.t("fileModal.success"));
             if (typeof reload == 'function') {
                 reload();
-            }            
+            }
         } catch (err) {
             toastError(err);
         }
@@ -239,13 +238,13 @@ const FilesModal = ({ open, onClose, fileListId, reload }) => {
                                         <>
                                             {values.options &&
                                                 values.options.length > 0 &&
-                                                values.options.map((info, index) => (    
+                                                values.options.map((info, index) => (
                                                     <div
                                                         className={classes.extraAttr}
                                                         key={`${index}-info`}
                                                     >
-                                                        <Grid container  spacing={0}>
-                                                            <Grid xs={6} md={10} item> 
+                                                        <Grid container spacing={0}>
+                                                            <Grid xs={6} md={10} item>
                                                                 <Field
                                                                     as={TextField}
                                                                     label={i18n.t("fileModal.form.extraName")}
@@ -257,15 +256,14 @@ const FilesModal = ({ open, onClose, fileListId, reload }) => {
                                                                     minRows={2}
                                                                     className={classes.textField}
                                                                 />
-                                                            </Grid>     
+                                                            </Grid>
                                                             <Grid xs={2} md={2} item style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                                                                 <input
                                                                     type="file"
                                                                     onChange={(e) => {
                                                                         const selectedFile = e.target.files[0];
-                                                                        const updatedOptions = [...values.options];                                                                
+                                                                        const updatedOptions = [...values.options];
                                                                         updatedOptions[index].file = selectedFile;
-                                                                       
                                                                         setFiles('options', updatedOptions);
 
                                                                         // Atualize a lista selectedFileNames para o campo específico
@@ -287,23 +285,24 @@ const FilesModal = ({ open, onClose, fileListId, reload }) => {
                                                                     onClick={() => remove(index)}
                                                                 >
                                                                     <DeleteOutlineIcon />
-                                                                </IconButton>    
+                                                                </IconButton>
                                                             </Grid>
                                                             <Grid xs={12} md={12} item>
-                                                                {info.path? info.path : selectedFileNames[index]}                               
-                                                            </Grid> 
-                                                        </Grid>                                                    
-                                                </div>                     
-                                                                                           
+                                                                {info.path ? info.path.split('/').pop() : selectedFileNames[index]}
+                                                            </Grid>
+                                                        </Grid>
+                                                    </div>
+
                                                 ))}
                                             <div className={classes.extraAttr}>
                                                 <Button
                                                     style={{ flex: 1, marginTop: 8 }}
                                                     variant="outlined"
                                                     color="primary"
-                                                    onClick={() => {push({ name: "", path: ""});
-                                                    setSelectedFileNames([...selectedFileNames, ""]);
-                                                }}
+                                                    onClick={() => {
+                                                        push({ name: "", path: "" });
+                                                        setSelectedFileNames([...selectedFileNames, ""]);
+                                                    }}
                                                 >
                                                     {`+ ${i18n.t("fileModal.buttons.fileOptions")}`}
                                                 </Button>

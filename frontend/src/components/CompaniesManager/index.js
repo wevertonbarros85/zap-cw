@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import {
   makeStyles,
   Paper,
@@ -28,26 +28,30 @@ import ModalUsers from "../ModalUsers";
 import api from "../../services/api";
 import { head, isArray, has } from "lodash";
 import { useDate } from "../../hooks/useDate";
+import ColorModeContext from "../../layout/themeContext";
 
 import moment from "moment";
 import { i18n } from "../../translate/i18n";
+import { useTheme } from "@material-ui/core/styles";
 
 const useStyles = makeStyles((theme) => ({
   root: {
     width: "100%",
+    padding: "2px"
   },
   mainPaper: {
     width: "100%",
     flex: 1,
-    padding: theme.spacing(2),
+    // padding: theme.spacing(2), //comentado para retirar o scroll do Empresas
   },
   fullWidth: {
     width: "100%",
   },
   tableContainer: {
     width: "100%",
-    overflowX: "scroll",
-    ...theme.scrollbarStyles,
+    // overflowX: "scroll",
+    // ...theme.scrollbarStyles,
+    padding: "2px",
   },
   textfield: {
     width: "100%",
@@ -56,16 +60,16 @@ const useStyles = makeStyles((theme) => ({
     textAlign: "right",
   },
   row: {
-    paddingTop: theme.spacing(2),
-    paddingBottom: theme.spacing(2),
+    // paddingTop: theme.spacing(2),
+    // paddingBottom: theme.spacing(2),
   },
   control: {
-    paddingRight: theme.spacing(1),
-    paddingLeft: theme.spacing(1),
+    // paddingRight: theme.spacing(1),
+    // paddingLeft: theme.spacing(1),
   },
   buttonContainer: {
     textAlign: "right",
-    padding: theme.spacing(1),
+    // padding: theme.spacing(1),
   },
 }));
 
@@ -82,9 +86,11 @@ export function CompanyForm(props) {
     phone: "",
     planId: "",
     status: true,
-    campaignsEnabled: false,
+    // campaignsEnabled: false,
     dueDate: "",
     recurrence: "",
+    password: "",
+    generateInvoice: true,
     ...initialValue,
   });
 
@@ -117,8 +123,9 @@ export function CompanyForm(props) {
     if (data.dueDate === "" || moment(data.dueDate).isValid() === false) {
       data.dueDate = null;
     }
+    console.log("Dados do formulário:", data);
     onSubmit(data);
-    setRecord({ ...initialValue, dueDate: "" });
+    setRecord({ ...initialValue, dueDate: "", generateInvoice: true });
   };
 
   const handleOpenModalUsers = async () => {
@@ -199,11 +206,11 @@ export function CompanyForm(props) {
       >
         {(values, setValues) => (
           <Form className={classes.fullWidth}>
-            <Grid spacing={2} justifyContent="flex-end" container>
-              <Grid xs={12} sm={6} md={4} item>
+            <Grid spacing={1} justifyContent="center" container>
+              <Grid xs={12} sm={6} md={3} item>
                 <Field
                   as={TextField}
-                  label={i18n.t("settings.company.form.name")}
+                  label={i18n.t("compaies.table.name")}
                   name="name"
                   variant="outlined"
                   className={classes.fullWidth}
@@ -213,7 +220,7 @@ export function CompanyForm(props) {
               <Grid xs={12} sm={6} md={2} item>
                 <Field
                   as={TextField}
-                  label={i18n.t("settings.company.form.email")}
+                  label={i18n.t("compaies.table.email")}
                   name="email"
                   variant="outlined"
                   className={classes.fullWidth}
@@ -224,7 +231,17 @@ export function CompanyForm(props) {
               <Grid xs={12} sm={6} md={2} item>
                 <Field
                   as={TextField}
-                  label={i18n.t("settings.company.form.phone")}
+                  label={i18n.t("compaies.table.password")}
+                  name="password"
+                  variant="outlined"
+                  className={classes.fullWidth}
+                  margin="dense"
+                />
+              </Grid>
+              <Grid xs={12} sm={6} md={2} item>
+                <Field
+                  as={TextField}
+                  label={i18n.t("compaies.table.phone")}
                   name="phone"
                   variant="outlined"
                   className={classes.fullWidth}
@@ -233,13 +250,11 @@ export function CompanyForm(props) {
               </Grid>
               <Grid xs={12} sm={6} md={2} item>
                 <FormControl margin="dense" variant="outlined" fullWidth>
-                  <InputLabel htmlFor="plan-selection">
-                    {i18n.t("settings.company.form.plan")}
-                  </InputLabel>
+                  <InputLabel htmlFor="plan-selection">{i18n.t("compaies.table.plan")}</InputLabel>
                   <Field
                     as={Select}
                     id="plan-selection"
-                    label={i18n.t("settings.company.form.plan")}
+                    label={i18n.t("compaies.table.plan")}
                     labelId="plan-selection-label"
                     name="planId"
                     margin="dense"
@@ -253,45 +268,70 @@ export function CompanyForm(props) {
                   </Field>
                 </FormControl>
               </Grid>
-              <Grid xs={12} sm={6} md={2} item>
+              <Grid xs={12} sm={6} md={1} item>
                 <FormControl margin="dense" variant="outlined" fullWidth>
-                  <InputLabel htmlFor="status-selection">
-                    {i18n.t("settings.company.form.status")}
-                  </InputLabel>
+                  <InputLabel htmlFor="status-selection">{i18n.t("compaies.table.active")}</InputLabel>
                   <Field
                     as={Select}
                     id="status-selection"
-                    label={i18n.t("settings.company.form.status")}
+                    label={i18n.t("compaies.table.active")}
                     labelId="status-selection-label"
                     name="status"
                     margin="dense"
                   >
-                    <MenuItem value={true}>{i18n.t("settings.company.form.yes")}</MenuItem>
-                    <MenuItem value={false}>{i18n.t("settings.company.form.no")}</MenuItem>
+                    <MenuItem value={true}>{i18n.t("compaies.table.yes")}</MenuItem>
+                    <MenuItem value={false}>{i18n.t("compaies.table.no")}</MenuItem>
                   </Field>
                 </FormControl>
-              </Grid>
-              <Grid xs={12} sm={6} md={2} item>
+              </Grid>              
+              {/* <Grid xs={12} sm={6} md={3} item>
                 <FormControl margin="dense" variant="outlined" fullWidth>
-                  <InputLabel htmlFor="status-selection">{i18n.t("settings.company.form.campanhas")}</InputLabel>
+                  <InputLabel htmlFor="payment-method-selection">
+                    Método de Pagamento
+                  </InputLabel>
+                  <Field
+                    as={Select}
+                    id="payment-method-selection"
+                    label="Método de Pagamento"
+                    labelId="payment-method-selection-label"
+                    name="paymentMethod"
+                    margin="dense"
+                  >
+                    <MenuItem value={"pix"}>PIX</MenuItem>
+                  </Field>
+                </FormControl>
+              </Grid> */}
+              <Grid xs={12} sm={6} md={2} item>
+                <Field
+                  as={TextField}
+                  label={i18n.t("compaies.table.document")}
+                  name="document"
+                  variant="outlined"
+                  className={classes.fullWidth}
+                  margin="dense"
+                />
+              </Grid>
+              {/* <Grid xs={12} sm={6} md={2} item>
+                <FormControl margin="dense" variant="outlined" fullWidth>
+                  <InputLabel htmlFor="status-selection">Campanhas</InputLabel>
                   <Field
                     as={Select}
                     id="campaigns-selection"
-                    label={i18n.t("settings.company.form.campanhas")}
+                    label="Campanhas"
                     labelId="campaigns-selection-label"
                     name="campaignsEnabled"
                     margin="dense"
                   >
-                    <MenuItem value={true}>{i18n.t("settings.company.form.enabled")}</MenuItem>
-                    <MenuItem value={false}>{i18n.t("settings.company.form.disabled")}</MenuItem>
+                    <MenuItem value={true}>Habilitadas</MenuItem>
+                    <MenuItem value={false}>Desabilitadas</MenuItem>
                   </Field>
                 </FormControl>
-              </Grid>
+              </Grid> */}
               <Grid xs={12} sm={6} md={2} item>
                 <FormControl variant="outlined" fullWidth>
                   <Field
                     as={TextField}
-                    label={i18n.t("settings.company.form.dueDate")}
+                    label={i18n.t("compaies.table.dueDate")}
                     type="date"
                     name="dueDate"
                     InputLabelProps={{
@@ -306,24 +346,44 @@ export function CompanyForm(props) {
               <Grid xs={12} sm={6} md={2} item>
                 <FormControl margin="dense" variant="outlined" fullWidth>
                   <InputLabel htmlFor="recorrencia-selection">
-                    {i18n.t("settings.company.form.recurrence")}
+                  {i18n.t("compaies.table.recurrence")}
                   </InputLabel>
                   <Field
                     as={Select}
-                    label={i18n.t("settings.company.form.recurrence")}
+                    label="Recorrência"
                     labelId="recorrencia-selection-label"
                     id="recurrence"
                     name="recurrence"
                     margin="dense"
                   >
-                    <MenuItem value="MENSAL">{i18n.t("settings.company.form.monthly")}</MenuItem>
-                    {/*<MenuItem value="BIMESTRAL">Bimestral</MenuItem>*/}
-                    {/*<MenuItem value="TRIMESTRAL">Trimestral</MenuItem>*/}
-                    {/*<MenuItem value="SEMESTRAL">Semestral</MenuItem>*/}
-                    {/*<MenuItem value="ANUAL">Anual</MenuItem>*/}
+                    <MenuItem value="MENSAL">{i18n.t("compaies.table.monthly")}</MenuItem>
+                    <MenuItem value="BIMESTRAL">{i18n.t("compaies.table.bimonthly")}</MenuItem>
+                    <MenuItem value="TRIMESTRAL">{i18n.t("compaies.table.quarterly")}</MenuItem>
+                    <MenuItem value="SEMESTRAL">{i18n.t("compaies.table.semester")}</MenuItem>
+                    <MenuItem value="ANUAL">{i18n.t("compaies.table.yearly")}</MenuItem>
                   </Field>
                 </FormControl>
               </Grid>
+
+              <Grid xs={12} sm={6} md={2} item>
+                <FormControl margin="dense" variant="outlined" fullWidth>
+                  <InputLabel htmlFor="generate-invoice-selection">
+                    Gerar Fatura
+                  </InputLabel>
+                  <Field
+                    as={Select}
+                    id="generate-invoice-selection"
+                    label="Gerar Fatura"
+                    labelId="generate-invoice-selection-label"
+                    name="generateInvoice"
+                    margin="dense"
+                  >
+                    <MenuItem value={true}>Sim</MenuItem>
+                    <MenuItem value={false}>Não</MenuItem>
+                  </Field>
+                </FormControl>
+              </Grid>
+
               <Grid xs={12} item>
                 <Grid justifyContent="flex-end" spacing={1} container>
                   <Grid xs={4} md={1} item>
@@ -334,7 +394,7 @@ export function CompanyForm(props) {
                       onClick={() => onCancel()}
                       variant="contained"
                     >
-                      {i18n.t("settings.company.buttons.clear")}
+                      {i18n.t("compaies.table.clear")}
                     </ButtonWithSpinner>
                   </Grid>
                   {record.id !== undefined ? (
@@ -347,8 +407,9 @@ export function CompanyForm(props) {
                           onClick={() => onDelete(record)}
                           variant="contained"
                           color="secondary"
+                          disabled={record.id === 1}
                         >
-                          {i18n.t("settings.company.buttons.delete")}
+                          {i18n.t("compaies.table.delete")}
                         </ButtonWithSpinner>
                       </Grid>
                       <Grid xs={6} md={2} item>
@@ -360,10 +421,10 @@ export function CompanyForm(props) {
                           variant="contained"
                           color="primary"
                         >
-                          {i18n.t("settings.company.buttons.expire")}
+                          {i18n.t("compaies.table.dueDate")}
                         </ButtonWithSpinner>
                       </Grid>
-                      <Grid xs={6} md={1} item>
+                      {/* <Grid xs={6} md={1} item>
                         <ButtonWithSpinner
                           style={{ marginTop: 7 }}
                           className={classes.fullWidth}
@@ -372,9 +433,9 @@ export function CompanyForm(props) {
                           variant="contained"
                           color="primary"
                         >
-                          {i18n.t("settings.company.buttons.user")}
+                          {i18n.t("compaies.table.user")}
                         </ButtonWithSpinner>
-                      </Grid>
+                      </Grid> */}
                     </>
                   ) : null}
                   <Grid xs={6} md={1} item>
@@ -386,7 +447,7 @@ export function CompanyForm(props) {
                       variant="contained"
                       color="primary"
                     >
-                      {i18n.t("settings.company.buttons.save")}
+                      {i18n.t("compaies.table.save")}
                     </ButtonWithSpinner>
                   </Grid>
                 </Grid>
@@ -402,7 +463,9 @@ export function CompanyForm(props) {
 export function CompaniesManagerGrid(props) {
   const { records, onSelect } = props;
   const classes = useStyles();
-  const { dateToClient } = useDate();
+  const { dateToClient, datetimeToClient } = useDate();
+  const { mode } = useContext(ColorModeContext);
+  const theme = useTheme();
 
   const renderStatus = (row) => {
     return row.status === false ? "Não" : "Sim";
@@ -412,33 +475,61 @@ export function CompaniesManagerGrid(props) {
     return row.planId !== null ? row.plan.name : "-";
   };
 
-  const renderCampaignsStatus = (row) => {
-    if (
-      has(row, "settings") &&
-      isArray(row.settings) &&
-      row.settings.length > 0
-    ) {
-      const setting = row.settings.find((s) => s.key === "campaignsEnabled");
-      if (setting) {
-        return setting.value === "true" ? i18n.t("settings.company.form.enabled") : i18n.t("settings.company.form.disabled");
-      }
-    }
-    return i18n.t("settings.company.form.disabled")
+  const renderPlanValue = (row) => {
+    return row.planId !== null ? row.plan.amount ? row.plan.amount.toLocaleString('pt-br', { minimumFractionDigits: 2 }) : '00.00' : "-";
   };
+
+  // const renderCampaignsStatus = (row) => {
+  //   if (
+  //     has(row, "settings") &&
+  //     isArray(row.settings) &&
+  //     row.settings.length > 0
+  //   ) {
+  //     const setting = row.settings.find((s) => s.key === "campaignsEnabled");
+  //     if (setting) {
+  //       return setting.value === "true" ? "Habilitadas" : "Desabilitadas";
+  //     }
+  //   }
+  //   return "Desabilitadas";
+  // };
 
   const rowStyle = (record) => {
     if (moment(record.dueDate).isValid()) {
       const now = moment();
       const dueDate = moment(record.dueDate);
       const diff = dueDate.diff(now, "days");
-      if (diff === 5) {
+      if (diff >= 1 && diff <= 5) {
         return { backgroundColor: "#fffead" };
       }
-      if (diff >= -3 && diff <= 4) {
-        return { backgroundColor: "#f7cc8f" };
-      }
-      if (diff === -4) {
+      if (diff <= 0) {
         return { backgroundColor: "#fa8c8c" };
+      }
+    }
+    return {};
+  };
+  
+  const cellStyle = (record) => {
+    if (moment(record.dueDate).isValid()) {
+      const now = moment();
+      const dueDate = moment(record.dueDate);
+      const diff = dueDate.diff(now, "days");
+      if (diff >= 1 && diff <= 5) {
+        return { color: "#000" }; // Texto preto para fundo amarelo
+      }
+      if (diff <= 0) {
+        return { color: "#fff" }; // Texto branco para fundo vermelho
+      }
+    }
+    return {};
+  };
+
+  const iconStyle = (record) => {
+    if (moment(record.dueDate).isValid()) {
+      const now = moment();
+      const dueDate = moment(record.dueDate);
+      const diff = dueDate.diff(now, "days");
+      if (diff >= 1 && diff <= 5) {
+        return { color: "#000" }; // Ícone preto para fundo amarelo
       }
     }
     return {};
@@ -448,44 +539,45 @@ export function CompaniesManagerGrid(props) {
     <Paper className={classes.tableContainer}>
       <Table
         className={classes.fullWidth}
-        size="small"
+        // size="small"
+        padding="none"
         aria-label="a dense table"
       >
         <TableHead>
           <TableRow>
-            <TableCell align="center" style={{ width: "1%" }}>
-              #
-            </TableCell>
-            <TableCell align="left">{i18n.t("settings.company.form.name")}</TableCell>
-            <TableCell align="left">{i18n.t("settings.company.form.email")}</TableCell>
-            <TableCell align="left">{i18n.t("settings.company.form.phone")}</TableCell>
-            <TableCell align="left">{i18n.t("settings.company.form.plan")}</TableCell>
-            <TableCell align="left">{i18n.t("settings.company.form.campanhas")}</TableCell>
-            <TableCell align="left">{i18n.t("settings.company.form.status")}</TableCell>
-            <TableCell align="left">{i18n.t("settings.company.form.createdAt")}</TableCell>
-            <TableCell align="left">{i18n.t("settings.company.form.expire")}</TableCell>
+            <TableCell align="center" style={{ width: "1%" }}>#</TableCell>
+            <TableCell align="left">{i18n.t("compaies.table.name")}</TableCell>
+            <TableCell align="left">{i18n.t("compaies.table.email")}</TableCell>
+            <TableCell align="center">{i18n.t("compaies.table.phone")}</TableCell>
+            <TableCell align="center">{i18n.t("compaies.table.plan")}</TableCell>
+            <TableCell align="center">{i18n.t("compaies.table.value")}</TableCell>
+            {/* <TableCell align="center">Campanhas</TableCell> */}
+            <TableCell align="center">{i18n.t("compaies.table.active")}</TableCell>
+            <TableCell align="center">{i18n.t("compaies.table.createdAt")}</TableCell>
+            <TableCell align="center">{i18n.t("compaies.table.dueDate")}</TableCell>
+            <TableCell align="center">{i18n.t("compaies.table.lastLogin")}</TableCell>
+            <TableCell align="center">{i18n.t("compaies.table.generateInvoice")}</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
           {records.map((row, key) => (
             <TableRow style={rowStyle(row)} key={key}>
-              <TableCell align="center" style={{ width: "1%" }}>
-                <IconButton onClick={() => onSelect(row)} aria-label="delete">
-                  <EditIcon />
+              <TableCell style={{...cellStyle(row), width: "1%"}} align="center">
+                <IconButton style={iconStyle(row)} onClick={() => onSelect(row)} aria-label="delete">
+                  <EditIcon style={iconStyle(row)} />
                 </IconButton>
               </TableCell>
-              <TableCell align="left">{row.name || "-"}</TableCell>
-              <TableCell align="left">{row.email || "-"}</TableCell>
-              <TableCell align="left">{row.phone || "-"}</TableCell>
-              <TableCell align="left">{renderPlan(row)}</TableCell>
-              <TableCell align="left">{renderCampaignsStatus(row)}</TableCell>
-              <TableCell align="left">{renderStatus(row)}</TableCell>
-              <TableCell align="left">{dateToClient(row.createdAt)}</TableCell>
-              <TableCell align="left">
-                {dateToClient(row.dueDate)}
-                <br />
-                <span>{row.recurrence}</span>
-              </TableCell>
+              <TableCell style={cellStyle(row)} align="left">{row.name || "-"}</TableCell>
+              <TableCell style={cellStyle(row)} align="left" size="small">{row.email || "-"}</TableCell>
+              <TableCell style={cellStyle(row)} align="center">{row.phone || "-"}</TableCell>
+              <TableCell style={cellStyle(row)} align="center">{renderPlan(row)}</TableCell>
+              <TableCell style={cellStyle(row)} align="center">{i18n.t("compaies.table.money")} {renderPlanValue(row)}</TableCell>
+              {/* <TableCell style={cellStyle(row)} align="center">{renderCampaignsStatus(row)}</TableCell> */}
+              <TableCell style={cellStyle(row)} align="center">{renderStatus(row)}</TableCell>
+              <TableCell style={cellStyle(row)} align="center">{dateToClient(row.createdAt)}</TableCell>
+              <TableCell style={cellStyle(row)} align="center">{dateToClient(row.dueDate)}<br /><span>{row.recurrence}</span></TableCell>
+              <TableCell style={cellStyle(row)} align="center">{datetimeToClient(row.lastLogin)}</TableCell>
+              <TableCell style={cellStyle(row)} align="center">{row.generateInvoice ? i18n.t("compaies.table.yes") : i18n.t("compaies.table.no")}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -507,9 +599,13 @@ export default function CompaniesManager() {
     phone: "",
     planId: "",
     status: true,
-    campaignsEnabled: false,
+    // campaignsEnabled: false,
     dueDate: "",
     recurrence: "",
+    password: "",
+    document: "",
+    paymentMethod: "",
+    generateInvoice: true
   });
 
   useEffect(() => {
@@ -521,28 +617,29 @@ export default function CompaniesManager() {
     setLoading(true);
     try {
       const companyList = await list();
+      console.log("Lista de empresas carregada:", companyList);
       setRecords(companyList);
     } catch (e) {
-      toast.error(i18n.t("settings.company.toasts.errorList"));
+      toast.error("Não foi possível carregar a lista de registros");
     }
     setLoading(false);
   };
 
   const handleSubmit = async (data) => {
+    console.log("Dados enviados para o backend:", data);
     setLoading(true);
     try {
-      if (data.id !== 0 && data.id !== undefined) {
+      if (data.id !== undefined) {
         await update(data);
       } else {
         await save(data);
       }
-
       await loadPlans();
       handleCancel();
-      toast.success(i18n.t("settings.company.toasts.success"));
+      toast.success("Operação realizada com sucesso!");
     } catch (e) {
       toast.error(
-        i18n.t("settings.company.toasts.error")
+        "Não foi possível realizar a operação. Verifique se já existe uma empresa com o mesmo nome ou se os campos foram preenchidos corretamente"
       );
     }
     setLoading(false);
@@ -554,9 +651,9 @@ export default function CompaniesManager() {
       await remove(record.id);
       await loadPlans();
       handleCancel();
-      toast.success(i18n.t("settings.company.toasts.success"));
+      toast.success("Operação realizada com sucesso!");
     } catch (e) {
-      toast.error(i18n.t("settings.company.toasts.errorOperation"));
+      toast.error("Não foi possível realizar a operação");
     }
     setLoading(false);
   };
@@ -568,29 +665,32 @@ export default function CompaniesManager() {
   const handleCancel = () => {
     setRecord((prev) => ({
       ...prev,
-      id: undefined,
       name: "",
       email: "",
       phone: "",
       planId: "",
       status: true,
-      campaignsEnabled: false,
+      // campaignsEnabled: false,
       dueDate: "",
       recurrence: "",
+      password: "",
+      document: "",
+      paymentMethod: "",
+      generateInvoice: true
     }));
   };
 
   const handleSelect = (data) => {
-    let campaignsEnabled = false;
+    // let campaignsEnabled = false;
 
-    const setting = data.settings.find(
-      (s) => s.key.indexOf("campaignsEnabled") > -1
-    );
-    if (setting) {
-      campaignsEnabled =
-        setting.value === "true" || setting.value === "enabled";
-    }
+    // const setting = data.settings.find(
+    //   (s) => s.key.indexOf("campaignsEnabled") > -1
+    // );
+    // if (setting) {
+    //   campaignsEnabled = setting.value === "true" || setting.value === "enabled";
+    // }
 
+    console.log("Dados da empresa selecionada:", data);
     setRecord((prev) => ({
       ...prev,
       id: data.id,
@@ -599,9 +699,13 @@ export default function CompaniesManager() {
       email: data.email || "",
       planId: data.planId || "",
       status: data.status === false ? false : true,
-      campaignsEnabled,
+      // campaignsEnabled,
       dueDate: data.dueDate || "",
       recurrence: data.recurrence || "",
+      password: "",
+      document: data.document || "",
+      paymentMethod: data.paymentMethod || "",
+      generateInvoice: data.generateInvoice !== undefined ? data.generateInvoice : true,
     }));
   };
 
@@ -622,12 +726,12 @@ export default function CompaniesManager() {
         </Grid>
       </Grid>
       <ConfirmationModal
-        title={i18n.t("settings.company.confirmModal.title")}
+        title="Exclusão de Registro"
         open={showConfirmDialog}
         onClose={() => setShowConfirmDialog(false)}
         onConfirm={() => handleDelete()}
       >
-        {i18n.t("settings.company.confirmModal.message")}
+        Deseja realmente excluir esse registro?
       </ConfirmationModal>
     </Paper>
   );

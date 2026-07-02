@@ -1,6 +1,6 @@
 import User from "../models/User";
 import Whatsapp from "../models/Whatsapp";
-import { logger } from "../utils/logger";
+import logger from "../utils/logger";
 
 const GetDefaultWhatsAppByUser = async (
   userId: number
@@ -10,7 +10,7 @@ const GetDefaultWhatsAppByUser = async (
     return null;
   }
 
-  logger.info(`Found whatsapp linked to user '${user.name}' is '${user.whatsapp.name}'.`);
+  // logger.info(`Found whatsapp linked to user '${user.name}' is '${user.whatsapp.name}'.`);
 
   return user.whatsapp;
 };

@@ -1,38 +1,53 @@
-import React, { useState, useEffect, useReducer, useRef, useContext } from "react";
-
+import React, { useContext, useState, useEffect, useReducer, useRef } from "react";
 import { isSameDay, parseISO, format } from "date-fns";
 import clsx from "clsx";
-
-import { green } from "@material-ui/core/colors";
+import { isNil } from "lodash";
+import { blue, green } from "@material-ui/core/colors";
 import {
   Button,
-  CircularProgress,
   Divider,
+  Typography,
   IconButton,
-  makeStyles,
+  makeStyles
 } from "@material-ui/core";
 
 import {
   AccessTime,
-  Block,
   Done,
   DoneAll,
   ExpandMore,
   GetApp,
+  Facebook,
+  Instagram,
+  Reply,
+  WhatsApp
 } from "@material-ui/icons";
-
+import LockIcon from '@material-ui/icons/Lock';
 import MarkdownWrapper from "../MarkdownWrapper";
+import VcardPreview from "../VcardPreview";
+import LocationPreview from "../LocationPreview";
 import ModalImageCors from "../ModalImageCors";
 import MessageOptionsMenu from "../MessageOptionsMenu";
 import whatsBackground from "../../assets/wa-background.png";
-import LocationPreview from "../LocationPreview";
-
-import whatsBackgroundDark from "../../assets/wa-background-dark.png"; //DARK MODE PLW DESIGN//
-
+import whatsBackgroundDark from "../../assets/wa-background-dark.png";
+import YouTubePreview from "../ModalYoutubeCors";
+import PdfPreview from "../PdfPreview";
+import { ReplyMessageContext } from "../../context/ReplyingMessage/ReplyingMessageContext";
+import { ForwardMessageContext } from "../../context/ForwarMessage/ForwardMessageContext";
+import AdMetaPreview from "../AdMetaPreview";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
-import { SocketContext } from "../../context/Socket/SocketContext";
 import { i18n } from "../../translate/i18n";
+import SelectMessageCheckbox from "./SelectMessageCheckbox";
+import useCompanySettings from "../../hooks/useSettings/companySettings";
+import { AuthContext } from "../../context/Auth/AuthContext";
+import { QueueSelectedContext } from "../../context/QueuesSelected/QueuesSelectedContext";
+import AudioModal from "../AudioModal";
+import { CircularProgress } from "@material-ui/core";
+import { useParams, useHistory } from 'react-router-dom';
+import { downloadResource } from "../../utils";
+import Template from "./templates";
+import { usePdfViewer } from "../../hooks/usePdfViewer";
 
 const useStyles = makeStyles((theme) => ({
   messagesListWrapper: {
@@ -46,18 +61,51 @@ const useStyles = makeStyles((theme) => ({
     minHeight: 200,
   },
 
+  currentTick: {
+    alignItems: "center",
+    textAlign: "center",
+    alignSelf: "center",
+    width: "95%",
+    backgroundColor: theme.palette.primary.main,
+    margin: "10px",
+    borderRadius: "10px",
+    boxShadow: "1px 5px 10px #b3b3b3",
+  },
+
+  currentTicktText: {
+    color: theme.palette.primary,
+    fontWeight: 'bold',
+    padding: 8,
+    alignSelf: "center",
+    marginLeft: "0px",
+  },
+
   messagesList: {
-    backgroundImage: theme.mode === 'light' ? `url(${whatsBackground})` : `url(${whatsBackgroundDark})`, //DARK MODE PLW DESIGN//
+    backgroundImage: theme.mode === 'light' ? `url(${whatsBackground})` : `url(${whatsBackgroundDark})`,
+    backgroundColor: theme.mode === 'light' ? "transparent" : "#0b0b0d",
     display: "flex",
     flexDirection: "column",
     flexGrow: 1,
-    padding: "20px 20px 20px 20px",
+    padding: "20px 20px 30px 20px",
     overflowY: "scroll",
     ...theme.scrollbarStyles,
   },
-
+  dragElement: {
+    background: 'rgba(255, 255, 255, 0.8)',
+    position: "absolute",
+    width: "100%",
+    height: "100%",
+    zIndex: 999999,
+    textAlign: "center",
+    fontSize: "3em",
+    border: "5px dashed #333",
+    color: '#333',
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center"
+  },
   circleLoading: {
-    color: green[500],
+    color: blue[500],
     position: "absolute",
     opacity: "70%",
     top: 0,
@@ -81,8 +129,8 @@ const useStyles = makeStyles((theme) => ({
     },
 
     whiteSpace: "pre-wrap",
-    backgroundColor: "#ffffff",
-    color: "#303030",
+    backgroundColor: theme.mode === 'light' ? "#ffffff" : "#202c33",
+    color: theme.mode === 'light' ? "#303030" : "#ffffff",
     alignSelf: "flex-start",
     borderTopLeftRadius: 0,
     borderTopRightRadius: 8,
@@ -92,13 +140,13 @@ const useStyles = makeStyles((theme) => ({
     paddingRight: 5,
     paddingTop: 5,
     paddingBottom: 0,
-    boxShadow: "0 1px 1px #b3b3b3",
+    boxShadow: theme.mode === 'light' ? "0 1px 1px #b3b3b3" : "0 1px 1px #000000"
   },
 
   quotedContainerLeft: {
     margin: "-3px -80px 6px -6px",
     overflow: "hidden",
-    backgroundColor: "#f0f0f0",
+    backgroundColor: theme.mode === 'light' ? "#f0f0f0" : "#1d282f",
     borderRadius: "7.5px",
     display: "flex",
     position: "relative",
@@ -116,7 +164,7 @@ const useStyles = makeStyles((theme) => ({
   quotedSideColorLeft: {
     flex: "none",
     width: "4px",
-    backgroundColor: "#6bcbef",
+    backgroundColor: "#388aff",
   },
 
   messageRight: {
@@ -133,9 +181,37 @@ const useStyles = makeStyles((theme) => ({
       top: 0,
       right: 0,
     },
-
     whiteSpace: "pre-wrap",
-    backgroundColor: "#dcf8c6",
+    backgroundColor: theme.mode === 'light' ? "#dcf8c6" : "#005c4b",
+    color: theme.mode === 'light' ? "#303030" : "#ffffff",
+    alignSelf: "flex-end",
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 0,
+    paddingLeft: 5,
+    paddingRight: 5,
+    paddingTop: 5,
+    paddingBottom: 0,
+    boxShadow: theme.mode === 'light' ? "0 1px 1px #b3b3b3" : "0 1px 1px #000000"
+  },
+
+  messageRightPrivate: {
+    marginLeft: 20,
+    marginTop: 2,
+    minWidth: 100,
+    maxWidth: 600,
+    height: "auto",
+    display: "block",
+    position: "relative",
+    "&:hover #messageActionsButton": {
+      display: "flex",
+      position: "absolute",
+      top: 0,
+      right: 0,
+    },
+    whiteSpace: "pre-wrap",
+    backgroundColor: "#F0E68C",
     color: "#303030",
     alignSelf: "flex-end",
     borderTopLeftRadius: 8,
@@ -146,13 +222,13 @@ const useStyles = makeStyles((theme) => ({
     paddingRight: 5,
     paddingTop: 5,
     paddingBottom: 0,
-    boxShadow: "0 1px 1px #b3b3b3",
+    boxShadow: theme.mode === 'light' ? "0 1px 1px #b3b3b3" : "0 1px 1px #000000"
   },
 
   quotedContainerRight: {
     margin: "-3px -80px 6px -6px",
     overflowY: "hidden",
-    backgroundColor: "#cfe9ba",
+    backgroundColor: theme.mode === 'light' ? "#cfe9ba" : "#025144",
     borderRadius: "7.5px",
     display: "flex",
     position: "relative",
@@ -191,11 +267,6 @@ const useStyles = makeStyles((theme) => ({
     overflowWrap: "break-word",
     padding: "3px 80px 6px 6px",
   },
-  
-  textContentItemEdited: {
-    overflowWrap: "break-word",
-    padding: "3px 120px 6px 6px",
-  },
 
   textContentItemDeleted: {
     fontStyle: "italic",
@@ -205,13 +276,18 @@ const useStyles = makeStyles((theme) => ({
   },
 
   messageMedia: {
-    objectFit: "cover",
-    width: 250,
-    height: 200,
+    // ✅ CORREÇÃO: objectFit removido para vídeos funcionarem melhor
+    // objectFit: "cover", // Removido pois pode causar problemas em vídeos
+    width: 400,
+    height: "auto",
     borderTopLeftRadius: 8,
     borderTopRightRadius: 8,
     borderBottomLeftRadius: 8,
     borderBottomRightRadius: 8,
+    // ✅ CORREÇÃO: Adicionar estilos específicos para vídeo
+    "&[controls]": {
+      objectFit: "contain", // Para vídeos, usar contain em vez de cover
+    }
   },
 
   timestamp: {
@@ -220,6 +296,17 @@ const useStyles = makeStyles((theme) => ({
     bottom: 0,
     right: 5,
     color: "#999",
+  },
+
+  forwardMessage: {
+    fontSize: 12,
+    fontStyle: "italic",
+    position: "absolute",
+    top: 0,
+    left: 5,
+    color: "#999",
+    display: "flex",
+    alignItems: "center"
   },
 
   dailyTimestamp: {
@@ -253,19 +340,51 @@ const useStyles = makeStyles((theme) => ({
   },
 
   ackDoneAllIcon: {
-    color: green[500],
+    color: blue[500],
     fontSize: 18,
     verticalAlign: "middle",
     marginLeft: 4,
   },
 
+  ackPlayedIcon: {
+    color: green[500],
+    fontSize: 18,
+    verticalAlign: "middle",
+    marginLeft: 4,
+  },
   downloadMedia: {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "inherit",
     padding: 10,
+    color: theme.mode === "light" ? theme.palette.light : theme.palette.dark,
   },
+
+  messageCenter: {
+    marginTop: 5,
+    alignItems: "center",
+    verticalAlign: "center",
+    alignContent: "center",
+    backgroundColor: "#E1F5FEEB",
+    fontSize: "12px",
+    minWidth: 100,
+    maxWidth: 270,
+    color: "#272727",
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 8,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
+    paddingLeft: 5,
+    paddingRight: 5,
+    paddingTop: 5,
+    paddingBottom: 0,
+    boxShadow: "0 1px 1px #b3b3b3",
+  },
+
+  deletedMessage: {
+    color: '#f55d65'
+  }
 }));
 
 const reducer = (state, action) => {
@@ -274,6 +393,7 @@ const reducer = (state, action) => {
     const newMessages = [];
 
     messages.forEach((message) => {
+
       const messageIndex = state.findIndex((m) => m.id === message.id);
       if (messageIndex !== -1) {
         state[messageIndex] = message;
@@ -314,43 +434,94 @@ const reducer = (state, action) => {
   }
 };
 
-const MessagesList = ({ ticket, ticketId, isGroup }) => {
+const MessagesList = ({
+  isGroup,
+  onDrop,
+  whatsappId,
+  queueId,
+  channel,
+  ticketStatus
+}) => {
   const classes = useStyles();
-
   const [messagesList, dispatch] = useReducer(reducer, []);
   const [pageNumber, setPageNumber] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const history = useHistory();
   const lastMessageRef = useRef();
 
   const [selectedMessage, setSelectedMessage] = useState({});
+  const { setReplyingMessage } = useContext(ReplyMessageContext);
   const [anchorEl, setAnchorEl] = useState(null);
   const messageOptionsMenuOpen = Boolean(anchorEl);
-  const currentTicketId = useRef(ticketId);
+  const { ticketId } = useParams();
 
-  const socketManager = useContext(SocketContext);
+  const currentTicketId = useRef(ticketId);
+  const { getAll } = useCompanySettings();
+  const [dragActive, setDragActive] = useState(false);
+  const [dragTimeout, setDragTimeout] = useState(null);
+
+  const [videoLoading, setVideoLoading] = useState(true);
+  const [videoError, setVideoError] = useState(false);
+
+  const [lgpdDeleteMessage, setLGPDDeleteMessage] = useState(false);
+  const { selectedQueuesMessage } = useContext(QueueSelectedContext);
+
+  // Hook simplificado para PDF
+  const {
+    downloadPdf,
+    extractPdfInfoFromMessage,
+    isPdfUrl
+  } = usePdfViewer();
+
+  const { showSelectMessageCheckbox } = useContext(ForwardMessageContext);
+  const { user, socket } = useContext(AuthContext);
+  const companyId = user.companyId;
+
+  useEffect(() => {
+    async function fetchData() {
+      const settings = await getAll(companyId);
+
+      let settinglgpdDeleteMessage;
+      let settingEnableLGPD;
+
+      for (const [key, value] of Object.entries(settings)) {
+        if (key === "lgpdDeleteMessage") settinglgpdDeleteMessage = value
+        if (key === "enableLGPD") settingEnableLGPD = value
+      }
+      if (settingEnableLGPD === "enabled" && settinglgpdDeleteMessage === "enabled") {
+        setLGPDDeleteMessage(true);
+      }
+    }
+    fetchData();
+  }, [])
 
   useEffect(() => {
     dispatch({ type: "RESET" });
     setPageNumber(1);
-
     currentTicketId.current = ticketId;
-  }, [ticketId]);
+  }, [ticketId, selectedQueuesMessage]);
 
   useEffect(() => {
     setLoading(true);
     const delayDebounceFn = setTimeout(() => {
       const fetchMessages = async () => {
-        if (ticketId === undefined) return;
+        if (ticketId === "undefined") {
+          history.push("/tickets");
+          return;
+        }
+        if (isNil(ticketId)) return;
         try {
           const { data } = await api.get("/messages/" + ticketId, {
-            params: { pageNumber },
+            params: { pageNumber, selectedQueues: JSON.stringify(selectedQueuesMessage) },
           });
 
           if (currentTicketId.current === ticketId) {
             dispatch({ type: "LOAD_MESSAGES", payload: data.messages });
             setHasMore(data.hasMore);
             setLoading(false);
+            setLoadingMore(false);
           }
 
           if (pageNumber === 1 && data.messages.length > 1) {
@@ -359,45 +530,73 @@ const MessagesList = ({ ticket, ticketId, isGroup }) => {
         } catch (err) {
           setLoading(false);
           toastError(err);
+          setLoadingMore(false);
         }
       };
+
       fetchMessages();
     }, 500);
     return () => {
       clearTimeout(delayDebounceFn);
     };
-  }, [pageNumber, ticketId]);
+  }, [pageNumber, ticketId, selectedQueuesMessage]);
 
   useEffect(() => {
-    const companyId = localStorage.getItem("companyId");
-    const socket = socketManager.getSocket(companyId);
+    if (ticketId === "undefined") {
+      return;
+    }
 
-    socket.on("ready", () => socket.emit("joinChatBox", `${ticket.id}`));
+    const companyId = user.companyId;
 
-    socket.on(`company-${companyId}-appMessage`, (data) => {
-      if (data.action === "create" && data.message.ticketId === currentTicketId.current) {
+    const connectEventMessagesList = () => {
+      socket.emit("joinChatBox", `${ticketId}`);
+    }
+
+    const onAppMessageMessagesList = (data) => {
+      if (data.action === "create" && data.ticket.uuid === ticketId) {
         dispatch({ type: "ADD_MESSAGE", payload: data.message });
         scrollToBottom();
       }
 
-      if (data.action === "update" && data.message.ticketId === currentTicketId.current) {
+      if (data.action === "update" && data?.message?.ticket?.uuid === ticketId) {
         dispatch({ type: "UPDATE_MESSAGE", payload: data.message });
       }
-    });
+
+      if (data.action == "delete" && data.message.ticket?.uuid === ticketId) {
+        dispatch({ type: "DELETE_MESSAGE", payload: data.messageId });
+      }
+    }
+    socket.on("connect", connectEventMessagesList);
+    socket.on(`company-${companyId}-appMessage`, onAppMessageMessagesList);
 
     return () => {
-      socket.disconnect();
+      socket.emit("joinChatBoxLeave", `${ticketId}`)
+      socket.off("connect", connectEventMessagesList);
+      socket.off(`company-${companyId}-appMessage`, onAppMessageMessagesList);
     };
-  }, [ticketId, ticket, socketManager]);
+
+  }, [ticketId]);
+
+  useEffect(() => {
+    return () => {
+      if (dragTimeout) {
+        clearTimeout(dragTimeout);
+      }
+    };
+  }, [dragTimeout]);
 
   const loadMore = () => {
+    if (loadingMore) return;
+    setLoadingMore(true);
     setPageNumber((prevPageNumber) => prevPageNumber + 1);
   };
 
   const scrollToBottom = () => {
-    if (lastMessageRef.current) {
-      lastMessageRef.current.scrollIntoView({});
-    }
+    setTimeout(() => {
+      if (lastMessageRef.current) {
+        lastMessageRef.current.scrollIntoView({});
+      }
+    }, 100);
   };
 
   const handleScroll = (e) => {
@@ -426,24 +625,80 @@ const MessagesList = ({ ticket, ticketId, isGroup }) => {
     setAnchorEl(null);
   };
 
+  const hanldeReplyMessage = (e, message) => {
+    setAnchorEl(null);
+    setReplyingMessage(message);
+  };
+
+  const getBasename = (filepath) => {
+    if (!filepath) return '';
+    // Remove query strings e hashes
+    const cleanPath = filepath.split('?')[0].split('#')[0];
+    // Pega o último segmento após /
+    const segments = cleanPath.split('/');
+    return segments[segments.length - 1];
+  };
+
   const checkMessageMedia = (message) => {
+    const isAudioMessage = (message) => {
+      if (message.mediaType === "audio") {
+        console.log("🎵 Detectado como áudio pelo mediaType:", message.mediaType);
+        return true;
+      }
 
-    if (message.mediaType === "locationMessage" && message.body.split('|').length >= 2) {
-      let locationParts = message.body.split('|')
-      let imageLocation = locationParts[0]
-      let linkLocation = locationParts[1]
+      if (message.mediaUrl) {
+        const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.webm'];
+        const url = message.mediaUrl.toLowerCase();
+        const hasAudioExtension = audioExtensions.some(ext => url.includes(ext));
 
-      let descriptionLocation = null
+        if (hasAudioExtension) {
+          console.log("🎵 Detectado como áudio pela URL:", url);
+          return true;
+        }
+      }
 
-      if (locationParts.length > 2)
-        descriptionLocation = message.body.split('|')[2]
+      if (message.body && typeof message.body === 'string') {
+        const body = message.body.toLowerCase();
+        const isAudioBody = body.includes('áudio gravado') ||
+          body.includes('audio_') ||
+          body.includes('🎵') ||
+          body.includes('arquivo de áudio') ||
+          body.includes('mensagem de voz');
 
-      return <LocationPreview image={imageLocation} link={linkLocation} description={descriptionLocation} />
+        if (isAudioBody) {
+          console.log("🎵 Detectado como áudio pelo body:", body);
+          return true;
+        }
+      }
+
+      return false;
+    };
+
+    // Templates
+    if (message.mediaType === "template") {
+      return <Template message={message} />;
     }
-    /* else if (message.mediaType === "vcard") {
+
+    // Localização
+    else if (message.mediaType === "locationMessage" && message.body.split('|').length >= 2) {
+      let locationParts = message.body.split('|');
+      let imageLocation = locationParts[0];
+      let linkLocation = locationParts[1];
+      let descriptionLocation = locationParts.length > 2 ? locationParts[2] : null;
+
+      return <LocationPreview 
+        image={imageLocation} 
+        link={linkLocation} 
+        description={descriptionLocation} 
+      />;
+    }
+
+    // Contatos
+    else if (message.mediaType === "contactMessage") {
       let array = message.body.split("\n");
       let obj = [];
       let contact = "";
+      
       for (let index = 0; index < array.length; index++) {
         const v = array[index];
         let values = v.split(":");
@@ -456,79 +711,225 @@ const MessagesList = ({ ticket, ticketId, isGroup }) => {
           }
         }
       }
-      return <VcardPreview contact={contact} numbers={obj[0].number} />
-    } */
-    /*else if (message.mediaType === "multi_vcard") {
-      console.log("multi_vcard")
-      console.log(message)
-    	
-      if(message.body !== null && message.body !== "") {
-        let newBody = JSON.parse(message.body)
-        return (
-          <>
-            {
-            newBody.map(v => (
-              <VcardPreview contact={v.name} numbers={v.number} />
-            ))
-            }
-          </>
-        )
-      } else return (<></>)
-    }*/
-    else if (message.mediaType === "image") {
-      return <ModalImageCors imageUrl={message.mediaUrl} />;
-    } else if (message.mediaType === "audio") {
+      
+      return <VcardPreview 
+        contact={contact} 
+        numbers={obj[0]?.number} 
+        queueId={message?.ticket?.queueId} 
+        whatsappId={message?.ticket?.whatsappId} 
+        channel={channel} 
+      />;
+    }
+
+    else if (message.mediaType === "adMetaPreview") { // Adicionado para renderizar o componente de preview de anúncio
+      console.log("Entrou no MetaPreview");
+      // ✅ CORREÇÃO: Parse correto dos dados - formato: image|sourceUrl|title|body|messageUser
+      let [image, sourceUrl, title, body, messageUser] = message.body.split('|');
+      
+      // Fallback para messageUser se não estiver presente
+      if (!messageUser || messageUser.trim() === "") {
+        messageUser = "Olá! Tenho interesse e queria mais informações, por favor.";
+      }
+      
+      return <AdMetaPreview 
+        image={image} 
+        sourceUrl={sourceUrl} 
+        title={title} 
+        body={body} 
+        messageUser={messageUser} 
+      />;
+    }
+
+    // PDF e Documentos - SÓ DOWNLOAD
+    else if (isPdfUrl(message.mediaUrl, message.body, message.mediaType)) {
+      
+      console.log("📄 Renderizando como documento/PDF:", message.id);
+      const pdfInfo = extractPdfInfoFromMessage(message);
+
       return (
-        <audio controls>
-          <source src={message.mediaUrl} type="audio/ogg"></source>
-        </audio>
-      );
-    } else if (message.mediaType === "video") {
-      return (
-        <video
-          className={classes.messageMedia}
-          src={message.mediaUrl}
-          controls
+        <PdfPreview
+          url={pdfInfo.url}
+          filename={pdfInfo.filename}
+          size={pdfInfo.size}
+          mediaType={pdfInfo.mediaType}
+          onDownload={(url, name) => {
+            console.log("📥 Download PDF solicitado:", { url, name });
+            downloadPdf(url, name);
+          }}
         />
       );
-    } else {
+    }
+
+    // Áudio
+    else if (isAudioMessage(message)) {
+      console.log("🎵 Renderizando como áudio:", message.id);
+      return (
+        <div style={{
+          width: '100%',
+          maxWidth: '300px',
+          padding: '8px',
+          backgroundColor: 'transparent'
+        }}>
+          <AudioModal
+            url={message.mediaUrl}
+            message={message}
+          />
+        </div>
+      );
+    }
+
+    // Imagens
+    else if (message.mediaType === "image") {
+      console.log("🖼️ Renderizando como imagem");
+      return <ModalImageCors imageUrl={message.mediaUrl} />;
+    }
+
+    // Vídeos
+    else if (message.mediaType === "video") {
+      console.log("🎥 Renderizando como vídeo");
+      
+      return (
+        <div style={{ maxWidth: "400px", width: "100%", position: "relative" }}>
+          {/* Loading indicator */}
+          {videoLoading && !videoError && (
+            <div style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              zIndex: 2,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "8px"
+            }}>
+              <CircularProgress size={30} />
+              <Typography variant="caption" color="textSecondary">
+                Carregando vídeo...
+              </Typography>
+            </div>
+          )}
+          
+          {/* Vídeo player melhorado */}
+          <video
+            className={classes.messageMedia}
+            src={message.mediaUrl}
+            controls
+            preload="metadata"
+            playsInline
+            style={{ 
+              width: "100%", 
+              height: "auto", 
+              maxHeight: "300px",
+              borderRadius: "8px",
+              backgroundColor: "#f0f0f0",
+              opacity: videoLoading ? 0.3 : 1,
+              transition: "opacity 0.3s ease"
+            }}
+            onLoadStart={() => {
+              console.log("⏳ Iniciando carregamento do vídeo");
+              setVideoLoading(true);
+              setVideoError(false);
+            }}
+            onLoadedData={() => {
+              console.log("✅ Vídeo carregado e pronto");
+              setVideoLoading(false);
+            }}
+            onCanPlay={() => {
+              console.log("✅ Vídeo pronto para reprodução");
+              setVideoLoading(false);
+            }}
+            onError={(e) => {
+              console.error("❌ Erro ao carregar vídeo:", e);
+              console.log("🔗 URL do vídeo:", message.mediaUrl);
+              setVideoLoading(false);
+              setVideoError(true);
+            }}
+          >
+            {/* ✅ CORREÇÃO: Múltiplos formatos para compatibilidade */}
+            <source src={message.mediaUrl} type="video/mp4" />
+            <source src={message.mediaUrl} type="video/webm" />
+            <source src={message.mediaUrl} type="video/ogg" />
+            
+            {/* Fallback para navegadores antigos */}
+            Seu navegador não suporta reprodução de vídeo.
+          </video>
+          
+          {/* Error state */}
+          {videoError && (
+            <div style={{ 
+              padding: "20px", 
+              textAlign: "center", 
+              backgroundColor: "#f5f5f5",
+              borderRadius: "8px",
+              color: "#666",
+              marginTop: "8px"
+            }}>
+              <Typography variant="body2" style={{ marginBottom: "12px" }}>
+                ❌ Erro ao carregar vídeo
+              </Typography>
+              <Button
+                startIcon={<GetApp />}
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.href = message.mediaUrl;
+                  link.download = message.body || 'video.mp4';
+                  link.click();
+                }}
+                variant="outlined"
+                size="small"
+              >
+                Baixar Vídeo
+              </Button>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Outros tipos de arquivo
+    else if (message.mediaUrl) {
+      console.log("📎 Renderizando como download genérico");
       return (
         <>
           <div className={classes.downloadMedia}>
             <Button
               startIcon={<GetApp />}
-              color="primary"
               variant="outlined"
-              target="_blank"
-              href={message.mediaUrl}
+              onClick={() => downloadPdf(message.mediaUrl, message.body || 'arquivo')}
             >
-              {i18n.t("messagesList.header.buttons.download")}
+              Download
             </Button>
           </div>
-          <div style={{marginBottom: message.body === "" ? 8 : 0}}>
-            <Divider />
-          </div>
+          <Divider />
         </>
       );
     }
+
+    return null;
   };
 
   const renderMessageAck = (message) => {
-    if (message.ack === 1) {
+    if (message.ack === 0) {
       return <AccessTime fontSize="small" className={classes.ackIcons} />;
-    }
-    if (message.ack === 2) {
-      return <Done fontSize="small" className={classes.ackIcons} />;
-    }
-    if (message.ack === 3) {
-      return <DoneAll fontSize="small" className={classes.ackIcons} />;
-    }
-    if (message.ack === 4 || message.ack === 5) {
-      return <DoneAll fontSize="small" className={classes.ackDoneAllIcon} />;
-    }
+    } else
+      if (message.ack === 1) {
+        return <Done fontSize="small" className={classes.ackIcons} />;
+      } else
+        if (message.ack === 2 || message.ack === 3) {
+          return <DoneAll fontSize="small" className={classes.ackIcons} />;
+        } else
+          if (message.ack === 4) {
+            return <DoneAll fontSize="small" className={message.mediaType === "audio" ? classes.ackPlayedIcon : classes.ackDoneAllIcon} />;
+          } else
+            if (message.ack === 5) {
+              return <DoneAll fontSize="small" className={classes.ackDoneAllIcon} />
+            }
   };
 
   const renderDailyTimestamps = (message, index) => {
+    const today = format(new Date(), "dd/MM/yyyy")
+
     if (index === 0) {
       return (
         <span
@@ -536,69 +937,86 @@ const MessagesList = ({ ticket, ticketId, isGroup }) => {
           key={`timestamp-${message.id}`}
         >
           <div className={classes.dailyTimestampText}>
-            {format(parseISO(messagesList[index].createdAt), "dd/MM/yyyy")}
+            {today === format(parseISO(messagesList[index].createdAt), "dd/MM/yyyy") ? "HOJE" : format(parseISO(messagesList[index].createdAt), "dd/MM/yyyy")}
           </div>
         </span>
       );
-    }
-    if (index < messagesList.length - 1) {
-      let messageDay = parseISO(messagesList[index].createdAt);
-      let previousMessageDay = parseISO(messagesList[index - 1].createdAt);
+    } else
+      if (index < messagesList.length - 1) {
+        let messageDay = parseISO(messagesList[index].createdAt);
+        let previousMessageDay = parseISO(messagesList[index - 1].createdAt);
 
-      if (!isSameDay(messageDay, previousMessageDay)) {
+        if (!isSameDay(messageDay, previousMessageDay)) {
+          return (
+            <span
+              className={classes.dailyTimestamp}
+              key={`timestamp-${message.id}`}
+            >
+              <div className={classes.dailyTimestampText}>
+                {today === format(parseISO(messagesList[index].createdAt), "dd/MM/yyyy") ? "HOJE" : format(parseISO(messagesList[index].createdAt), "dd/MM/yyyy")}
+              </div>
+            </span>
+          );
+        }
+      } else
+        if (index === messagesList.length - 1) {
+          return (
+            <div
+              key={`ref-${message.id}`}
+              ref={lastMessageRef}
+              style={{ float: "left", clear: "both" }}
+            />
+          );
+        }
+  };
+
+  const renderTicketsSeparator = (message, index) => {
+    let lastTicket = messagesList[index - 1]?.ticketId;
+    let currentTicket = message.ticketId;
+
+    if (lastTicket !== currentTicket && lastTicket !== undefined) {
+      if (message?.ticket?.queue) {
         return (
           <span
-            className={classes.dailyTimestamp}
-            key={`timestamp-${message.id}`}
+            className={classes.currentTick}
+            key={`timestamp-${message.id}a`}
           >
-            <div className={classes.dailyTimestampText}>
-              {format(parseISO(messagesList[index].createdAt), "dd/MM/yyyy")}
+            <div
+              className={classes.currentTicktText}
+              style={{ backgroundColor: message?.ticket?.queue?.color || "grey" }}
+            >
+              #{i18n.t("ticketsList.called")} {message?.ticketId} - {message?.ticket?.queue?.name}
             </div>
+
+          </span>
+        );
+      } else {
+        return (
+          <span
+            className={classes.currentTick}
+            key={`timestamp-${message.id}b`}
+          >
+            <div
+              className={classes.currentTicktText}
+              style={{ backgroundColor: "grey" }}
+            >
+              #{i18n.t("ticketsList.called")} {message.ticketId} - {i18n.t("ticketsList.noQueue")}
+            </div>
+
           </span>
         );
       }
     }
-    if (index === messagesList.length - 1) {
-      return (
-        <div
-          key={`ref-${message.createdAt}`}
-          ref={lastMessageRef}
-          style={{ float: "left", clear: "both" }}
-        />
-      );
-    }
-  };
 
-  const renderNumberTicket = (message, index) => {
-    if (index < messagesList.length && index > 0) {
-
-      let messageTicket = message.ticketId;
-      let connectionName = message.ticket?.whatsapp?.name;
-      let previousMessageTicket = messagesList[index - 1].ticketId;
-
-      if (messageTicket !== previousMessageTicket) {
-        return (
-          <center>
-            <div className={classes.ticketNunberClosed}>
-              Conversa encerrada: {format(parseISO(messagesList[index - 1].createdAt), "dd/MM/yyyy HH:mm:ss")}
-            </div>
-
-            <div className={classes.ticketNunberOpen}>
-              Conversa iniciada: {format(parseISO(message.createdAt), "dd/MM/yyyy HH:mm:ss")}
-            </div>
-          </center>
-        );
-      }
-    }
   };
 
   const renderMessageDivider = (message, index) => {
     if (index < messagesList.length && index > 0) {
       let messageUser = messagesList[index].fromMe;
       let previousMessageUser = messagesList[index - 1].fromMe;
-
       if (messageUser !== previousMessageUser) {
         return (
+
           <span style={{ marginTop: 16 }} key={`divider-${message.id}`}></span>
         );
       }
@@ -606,6 +1024,7 @@ const MessagesList = ({ ticket, ticketId, isGroup }) => {
   };
 
   const renderQuotedMessage = (message) => {
+
     return (
       <div
         className={clsx(classes.quotedContainerLeft, {
@@ -627,19 +1046,42 @@ const MessagesList = ({ ticket, ticketId, isGroup }) => {
           {message.quotedMsg.mediaType === "audio"
             && (
               <div className={classes.downloadMedia}>
-                <audio controls>
-                  <source src={message.quotedMsg.mediaUrl} type="audio/ogg"></source>
-                </audio>
+                <AudioModal url={message.quotedMsg.mediaUrl} />
               </div>
             )
           }
           {message.quotedMsg.mediaType === "video"
             && (
-              <video
-                className={classes.messageMedia}
-                src={message.quotedMsg.mediaUrl}
-                controls
-              />
+              <div style={{ maxWidth: "300px", width: "100%" }}>
+                <video
+                  className={classes.messageMedia}
+                  src={message.quotedMsg.mediaUrl}
+                  controls
+                  preload="metadata"
+                  style={{ 
+                    width: "100%", 
+                    height: "auto", 
+                    maxHeight: "200px",
+                    borderRadius: "6px",
+                    backgroundColor: "#f0f0f0"
+                  }}
+                  onError={(e) => {
+                    console.error("❌ Erro ao carregar vídeo citado:", e);
+                  }}
+                >
+                  <source src={message.quotedMsg.mediaUrl} type="video/mp4" />
+                  <source src={message.quotedMsg.mediaUrl} type="video/webm" />
+                  <source src={message.quotedMsg.mediaUrl} type="video/ogg" />
+                  <div style={{ padding: "10px", textAlign: "center", fontSize: "12px", color: "#999" }}>
+                    ❌ Erro ao carregar vídeo
+                  </div>
+                </video>
+              </div>
+            )
+          }
+          {message.quotedMsg.mediaType === "contactMessage"
+            && (
+              "Contato"
             )
           }
           {message.quotedMsg.mediaType === "application"
@@ -647,39 +1089,112 @@ const MessagesList = ({ ticket, ticketId, isGroup }) => {
               <div className={classes.downloadMedia}>
                 <Button
                   startIcon={<GetApp />}
-                  color="primary"
                   variant="outlined"
                   target="_blank"
                   href={message.quotedMsg.mediaUrl}
                 >
-                  {i18n.t("messagesList.header.buttons.download")}
+                  Download
                 </Button>
               </div>
             )
           }
 
           {message.quotedMsg.mediaType === "image"
-            && (<ModalImageCors imageUrl={message.quotedMsg.mediaUrl} />)}
-
-          {message.quotedMsg.mediaType === "contactMessage"
             && (
-                <span>{message.quotedMsg.body}</span>
-              )
-          }
+              <ModalImageCors imageUrl={message.quotedMsg.mediaUrl} />)
+            || message.quotedMsg?.body}
+
+          {!message.quotedMsg.mediaType === "image" && message.quotedMsg?.body}
+
         </div>
       </div>
     );
   };
 
+  const handleDrag = event => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (event.type === "dragenter" || event.type === "dragover") {
+      const hasFiles = event.dataTransfer &&
+        event.dataTransfer.types &&
+        (event.dataTransfer.types.includes('Files') ||
+          event.dataTransfer.types.includes('application/x-moz-file'));
+
+      if (hasFiles) {
+        if (dragTimeout) {
+          clearTimeout(dragTimeout);
+        }
+
+        const timeout = setTimeout(() => {
+          if (event.dataTransfer.items && event.dataTransfer.items.length > 0) {
+            setDragActive(true);
+          }
+        }, 100);
+
+        setDragTimeout(timeout);
+      }
+    } else if (event.type === "dragleave") {
+      if (dragTimeout) {
+        clearTimeout(dragTimeout);
+        setDragTimeout(null);
+      }
+
+      const rect = event.currentTarget.getBoundingClientRect();
+      const x = event.clientX;
+      const y = event.clientY;
+
+      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+        setDragActive(false);
+      }
+    }
+  }
+
+  const isYouTubeLink = (url) => {
+    const youtubeRegex = /(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+    return youtubeRegex.test(url);
+  };
+
+  const handleDrop = event => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (dragTimeout) {
+      clearTimeout(dragTimeout);
+      setDragTimeout(null);
+    }
+
+    setDragActive(false);
+
+    if (event.dataTransfer.files &&
+      event.dataTransfer.files.length > 0 &&
+      event.dataTransfer.files[0] instanceof File) {
+      if (onDrop) {
+        onDrop(event.dataTransfer.files);
+      }
+    }
+  }
+  const xmlRegex = /<([^>]+)>/g;
+  const boldRegex = /\*(.*?)\*/g;
+
+  const formatXml = (xmlString) => {
+    // Verifica se o XML contém a assinatura com nome do atendente
+    if (boldRegex.test(xmlString)) {
+      // Formata o texto dentro da assinatura em negrito
+      xmlString = xmlString.replace(boldRegex, "**$1**");
+    }
+    return xmlString;
+  };
+
   const renderMessages = () => {
+
     if (messagesList.length > 0) {
       const viewMessagesList = messagesList.map((message, index) => {
-
         if (message.mediaType === "call_log") {
           return (
             <React.Fragment key={message.id}>
               {renderDailyTimestamps(message, index)}
-              {renderNumberTicket(message, index)}
+              {renderTicketsSeparator(message, index)}
               {renderMessageDivider(message, index)}
               <div className={classes.messageCenter}>
                 <IconButton
@@ -697,10 +1212,11 @@ const MessagesList = ({ ticket, ticketId, isGroup }) => {
                     {message.contact?.name}
                   </span>
                 )}
+
                 <div>
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 17" width="20" height="17">
                     <path fill="#df3333" d="M18.2 12.1c-1.5-1.8-5-2.7-8.2-2.7s-6.7 1-8.2 2.7c-.7.8-.3 2.3.2 2.8.2.2.3.3.5.3 1.4 0 3.6-.7 3.6-.7.5-.2.8-.5.8-1v-1.3c.7-1.2 5.4-1.2 6.4-.1l.1.1v1.3c0 .2.1.4.2.6.1.2.3.3.5.4 0 0 2.2.7 3.6.7.2 0 1.4-2 .5-3.1zM5.4 3.2l4.7 4.6 5.8-5.7-.9-.8L10.1 6 6.4 2.3h2.5V1H4.1v4.8h1.3V3.2z"></path>
-                  </svg> <span>{i18n.t("messagesList.lostCall")} {format(parseISO(message.createdAt), "HH:mm")}</span>
+                  </svg> <span>{i18n.t("ticketsList.missedCall")} {format(parseISO(message.createdAt), "HH:mm")}</span>
                 </div>
               </div>
             </React.Fragment>
@@ -711,9 +1227,18 @@ const MessagesList = ({ ticket, ticketId, isGroup }) => {
           return (
             <React.Fragment key={message.id}>
               {renderDailyTimestamps(message, index)}
-              {renderNumberTicket(message, index)}
+              {renderTicketsSeparator(message, index)}
               {renderMessageDivider(message, index)}
-              <div className={classes.messageLeft}>
+              <div
+                className={classes.messageLeft}
+                title={message.queueId && message.queue?.name}
+                onDoubleClick={(e) => hanldeReplyMessage(e, message)}
+              >
+                {showSelectMessageCheckbox && (
+                  <SelectMessageCheckbox
+                    message={message}
+                  />
+                )}
                 <IconButton
                   variant="contained"
                   size="small"
@@ -724,35 +1249,78 @@ const MessagesList = ({ ticket, ticketId, isGroup }) => {
                 >
                   <ExpandMore />
                 </IconButton>
+
+                {message.isForwarded && (
+                  <div>
+                    <span className={classes.forwardMessage}
+                    ><Reply style={{ color: "grey", transform: 'scaleX(-1)' }} /> Encaminhada
+                    </span>
+                    <br />
+                  </div>
+                )}
                 {isGroup && (
                   <span className={classes.messageContactName}>
                     {message.contact?.name}
                   </span>
                 )}
+                {isYouTubeLink(message.body) && (
+                  <>
+                    <YouTubePreview videoUrl={message.body} />
+                  </>
+                )}
 
-                {/* aviso de mensagem apagado pelo contato */}
-                {message.isDeleted && (
+                {!lgpdDeleteMessage && message.isDeleted && (
                   <div>
-                    <span className={"message-deleted"}
-                    >{i18n.t("messagesList.deletedMessage")} &nbsp;
-                      <Block
-                        color="error"
-                        fontSize="small"
-                        className={classes.deletedIcon}
-                      />
+                    <span className={classes.deletedMessage}
+                    >🚫 Essa mensagem foi apagada pelo contato &nbsp;
                     </span>
                   </div>
                 )}
 
-                {(message.mediaUrl || message.mediaType === "locationMessage" || message.mediaType === "vcard"
-                  //|| message.mediaType === "multi_vcard" 
+                {(message.mediaUrl || message.mediaType === "locationMessage" || message.mediaType === "contactMessage" || message.mediaType === "template" || message.mediaType === "adMetaPreview"
                 ) && checkMessageMedia(message)}
-                <div className={classes.textContentItem}>
+
+                <div className={clsx(classes.textContentItem, {
+                  [classes.textContentItemDeleted]: message.isDeleted,
+                })}>
                   {message.quotedMsg && renderQuotedMessage(message)}
-                  <MarkdownWrapper>{message.mediaType === "locationMessage" ? null : message.body}</MarkdownWrapper>
+                  {
+                    message.mediaType !== "adMetaPreview" && (
+                      (message.mediaUrl !== null && (message.mediaType === "image" || message.mediaType === "video") && getBasename(message.mediaUrl).trim() !== message.body.trim()) ||
+                      message.mediaType !== "audio" &&
+                      message.mediaType !== "image" &&
+                      message.mediaType !== "video" &&
+                      message.mediaType != "reactionMessage" &&
+                      message.mediaType != "locationMessage" &&
+                      message.mediaType !== "contactMessage" &&
+                      message.mediaType !== "template"
+                    ) && (
+                      <>
+                        {xmlRegex.test(message.body) && (
+                          <span>{message.body}</span>
+
+                        )}
+                        {!xmlRegex.test(message.body) && (
+                          <MarkdownWrapper>{(lgpdDeleteMessage && message.isDeleted) ? "🚫 _Mensagem apagada_ " :
+                            message.body
+                          }</MarkdownWrapper>)}
+
+                      </>
+
+                    )}
+
+                  {message.quotedMsg && message.mediaType === "reactionMessage" && (
+                    <>
+                      <span style={{ marginLeft: "0px" }}>
+                        <MarkdownWrapper>
+                          {"" + message?.contact?.name + " reagiu... " + message.body}
+                        </MarkdownWrapper>
+                      </span>
+                    </>
+                  )}
+
                   <span className={classes.timestamp}>
-				    {message.isEdited && <span>Editada </span>}
-                    {format(parseISO(message.createdAt), "HH:mm")}
+                    {message.isEdited ? "Editada " + format(parseISO(message.createdAt), "HH:mm") : format(parseISO(message.createdAt), "HH:mm")}
                   </span>
                 </div>
               </div>
@@ -762,9 +1330,19 @@ const MessagesList = ({ ticket, ticketId, isGroup }) => {
           return (
             <React.Fragment key={message.id}>
               {renderDailyTimestamps(message, index)}
-              {renderNumberTicket(message, index)}
+              {renderTicketsSeparator(message, index)}
               {renderMessageDivider(message, index)}
-              <div className={classes.messageRight}>
+              <div
+                className={message.isPrivate ? classes.messageRightPrivate : classes.messageRight}
+                title={message.queueId && message.queue?.name}
+                onDoubleClick={(e) => hanldeReplyMessage(e, message)}
+              >
+                {showSelectMessageCheckbox && (
+                  <SelectMessageCheckbox
+                    message={message}
+                  />
+                )}
+
                 <IconButton
                   variant="contained"
                   size="small"
@@ -775,27 +1353,61 @@ const MessagesList = ({ ticket, ticketId, isGroup }) => {
                 >
                   <ExpandMore />
                 </IconButton>
-                {(message.mediaUrl || message.mediaType === "locationMessage" || message.mediaType === "vcard"
-                  //|| message.mediaType === "multi_vcard" 
+                {message.isForwarded && (
+                  <div>
+                    <span className={classes.forwardMessage}
+                    ><Reply style={{ color: "grey", transform: 'scaleX(-1)' }} /> Encaminhada
+                    </span>
+                    <br />
+                  </div>
+                )}
+                {isYouTubeLink(message.body) && (
+                  <>
+                    <YouTubePreview videoUrl={message.body} />
+                  </>
+                )}
+                {!lgpdDeleteMessage && message.isDeleted && (
+                  <div>
+                    <span className={classes.deletedMessage}
+                    >🚫 Essa mensagem foi apagada &nbsp;
+                    </span>
+                  </div>
+                )}
+                {(message.mediaUrl || message.mediaType === "locationMessage" || message.mediaType === "contactMessage" || message.mediaType === "template"
                 ) && checkMessageMedia(message)}
                 <div
                   className={clsx(classes.textContentItem, {
                     [classes.textContentItemDeleted]: message.isDeleted,
-					[classes.textContentItemEdited]: message.isEdited,
                   })}
                 >
-                  {message.isDeleted && (
-                    <Block
-                      color="disabled"
-                      fontSize="small"
-                      className={classes.deletedIcon}
-                    />
-                  )}
+
                   {message.quotedMsg && renderQuotedMessage(message)}
-                  <MarkdownWrapper>{message.mediaType === "locationMessage" ? null : message.body}</MarkdownWrapper>
+
+                  {
+                    ((message.mediaType === "image" || message.mediaType === "video") && getBasename(message.mediaUrl) === message.body) ||
+                    (message.mediaType !== "audio" && message.mediaType != "reactionMessage" && message.mediaType != "locationMessage" && message.mediaType !== "contactMessage" && message.mediaType !== "template") && (
+                      <>
+                        {xmlRegex.test(message.body) && (
+                          <div>{formatXml(message.body)}</div>
+
+                        )}
+                        {!xmlRegex.test(message.body) && (<MarkdownWrapper>{message.body}</MarkdownWrapper>)}
+
+                      </>
+                    )}
+
+                  {message.quotedMsg && message.mediaType === "reactionMessage" && (
+                    <>
+                      <span style={{ marginLeft: "0px" }}>
+                        <MarkdownWrapper>
+                          {"Você reagiu... " + message.body}
+                        </MarkdownWrapper>
+                      </span>
+                    </>
+                  )}
+
                   <span className={classes.timestamp}>
-				    {message.isEdited && <span>{i18n.t("messagesList.edited")}</span>}
-                    {format(parseISO(message.createdAt), "HH:mm")}
+                    {message.isEdited ? "Editada " + format(parseISO(message.createdAt), "HH:mm") : format(parseISO(message.createdAt), "HH:mm")}
                     {renderMessageAck(message)}
                   </span>
                 </div>
@@ -806,25 +1418,62 @@ const MessagesList = ({ ticket, ticketId, isGroup }) => {
       });
       return viewMessagesList;
     } else {
-      return <div>{i18n.t("messagesList.saudation")}</div>;
+      return <div>Diga olá para seu novo contato!</div>;
     }
   };
+const shouldBlurMessages = ticketStatus === "pending" && user.allowSeeMessagesInPendingTickets === "disabled";
 
   return (
-    <div className={classes.messagesListWrapper}>
+    <div className={classes.messagesListWrapper} onDragEnter={handleDrag}>
+      {dragActive && <div className={classes.dragElement} onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}>Solte o arquivo aqui</div>}
       <MessageOptionsMenu
         message={selectedMessage}
         anchorEl={anchorEl}
         menuOpen={messageOptionsMenuOpen}
         handleClose={handleCloseMessageOptionsMenu}
+        isGroup={isGroup}
+        whatsappId={whatsappId}
+        queueId={queueId}
       />
-      <div
-        id="messagesList"
-        className={classes.messagesList}
-        onScroll={handleScroll}
-      >
-        {messagesList.length > 0 ? renderMessages() : []}
-      </div>
+      
+
+<div
+  id="messagesList"
+  className={classes.messagesList}
+  onScroll={handleScroll}
+  style={{
+    filter: shouldBlurMessages ? "blur(4px)" : "none",
+    pointerEvents: shouldBlurMessages ? "none" : "auto"
+  }}
+>
+  {messagesList.length > 0 ? renderMessages() : []}
+</div>
+
+      {(channel !== "whatsapp" && channel !== undefined) && (
+        <div
+          style={{
+            width: "100%",
+            display: "flex",
+            padding: "10px",
+            alignItems: "center",
+            backgroundColor: "#E1F3FB",
+          }}
+        >
+          {channel === "facebook" ? (
+            <Facebook />
+          ) : channel === "instagram" ? (
+            <Instagram />
+          ) : (
+            <WhatsApp />
+          )}
+
+          <span>
+            Você tem 24h para responder após receber uma mensagem, de acordo
+            com as políticas da Meta.
+          </span>
+        </div>
+      )}
+      
       {loading && (
         <div>
           <CircularProgress className={classes.circleLoading} />

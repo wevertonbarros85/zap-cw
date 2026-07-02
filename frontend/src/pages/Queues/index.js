@@ -25,7 +25,9 @@ import { DeleteOutline, Edit } from "@material-ui/icons";
 import QueueModal from "../../components/QueueModal";
 import { toast } from "react-toastify";
 import ConfirmationModal from "../../components/ConfirmationModal";
-import { SocketContext } from "../../context/Socket/SocketContext";
+// import { SocketContext } from "../../context/Socket/SocketContext";
+import { AuthContext } from "../../context/Auth/AuthContext";
+import ForbiddenPage from "../../components/ForbiddenPage";
 
 const useStyles = makeStyles((theme) => ({
   mainPaper: {
@@ -93,8 +95,10 @@ const Queues = () => {
   const [queueModalOpen, setQueueModalOpen] = useState(false);
   const [selectedQueue, setSelectedQueue] = useState(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  //   const socketManager = useContext(SocketContext);
+  const { user, socket } = useContext(AuthContext);
+  const companyId = user.companyId;
 
-  const socketManager = useContext(SocketContext);
 
   useEffect(() => {
     (async () => {
@@ -112,10 +116,8 @@ const Queues = () => {
   }, []);
 
   useEffect(() => {
-    const companyId = localStorage.getItem("companyId");
-    const socket = socketManager.getSocket(companyId);
 
-    socket.on(`company-${companyId}-queue`, (data) => {
+    const onQueueEvent = (data) => {
       if (data.action === "update" || data.action === "create") {
         dispatch({ type: "UPDATE_QUEUES", payload: data.queue });
       }
@@ -123,12 +125,13 @@ const Queues = () => {
       if (data.action === "delete") {
         dispatch({ type: "DELETE_QUEUE", payload: data.queueId });
       }
-    });
+    };
+    socket.on(`company-${companyId}-queue`, onQueueEvent);
 
     return () => {
-      socket.disconnect();
+      socket.off(`company-${companyId}-queue`, onQueueEvent);
     };
-  }, [socketManager]);
+  }, [socket, companyId]);
 
   const handleOpenQueueModal = () => {
     setQueueModalOpen(true);
@@ -153,7 +156,7 @@ const Queues = () => {
   const handleDeleteQueue = async (queueId) => {
     try {
       await api.delete(`/queue/${queueId}`);
-      toast.success(i18n.t("queues.toasts.success"));
+      toast.success(i18n.t("Queue deleted successfully!"));
     } catch (err) {
       toastError(err);
     }
@@ -165,8 +168,7 @@ const Queues = () => {
       <ConfirmationModal
         title={
           selectedQueue &&
-          `${i18n.t("queues.confirmationModal.deleteTitle")} ${
-            selectedQueue.name
+          `${i18n.t("queues.confirmationModal.deleteTitle")} ${selectedQueue.name
           }?`
         }
         open={confirmModalOpen}
@@ -179,108 +181,120 @@ const Queues = () => {
         open={queueModalOpen}
         onClose={handleCloseQueueModal}
         queueId={selectedQueue?.id}
+        onEdit={(res) => {
+          if (res) {
+            setTimeout(() => {
+              handleEditQueue(res)
+            }, 500)
+          }
+        }}
       />
-      <MainHeader>
-        <Title>{i18n.t("queues.title")}</Title>
-        <MainHeaderButtonsWrapper>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={handleOpenQueueModal}
-          >
-            {i18n.t("queues.buttons.add")}
-          </Button>
-        </MainHeaderButtonsWrapper>
-      </MainHeader>
-      <Paper className={classes.mainPaper} variant="outlined">
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-			   <TableCell align="center">
-                {i18n.t("queues.table.id")}
-              </TableCell>
-              <TableCell align="center">
-                {i18n.t("queues.table.name")}
-              </TableCell>
-              <TableCell align="center">
-                {i18n.t("queues.table.color")}
-              </TableCell>
-              <TableCell align="center">
-                {i18n.t("queues.table.orderQueue")}
-              </TableCell>
-              <TableCell align="center">
-                {i18n.t("queues.table.greeting")}
-              </TableCell>
-              <TableCell align="center">
-                {i18n.t("queues.table.actions")}
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            <>
-              {queues.map((queue) => (
-                <TableRow key={queue.id}>
-				<TableCell align="center">{queue.id}</TableCell>
-                  <TableCell align="center">{queue.name}</TableCell>
+      {user.profile === "user" ?
+        <ForbiddenPage />
+        :
+        <>
+          <MainHeader>
+            <Title>{i18n.t("queues.title")} ({queues.length})</Title>
+            <MainHeaderButtonsWrapper>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={handleOpenQueueModal}
+              >
+                {i18n.t("queues.buttons.add")}
+              </Button>
+            </MainHeaderButtonsWrapper>
+          </MainHeader>
+          <Paper className={classes.mainPaper} variant="outlined">
+            <Table size="small">
+              <TableHead>
+                <TableRow>
                   <TableCell align="center">
-                    <div className={classes.customTableCell}>
-                      <span
-                        style={{
-                          backgroundColor: queue.color,
-                          width: 60,
-                          height: 20,
-                          alignSelf: "center",
-                        }}
-                      />
-                    </div>
+                    {i18n.t("queues.table.ID")}
                   </TableCell>
                   <TableCell align="center">
-                    <div className={classes.customTableCell}>
-                      <Typography
-                        style={{ width: 300, align: "center" }}
-                        noWrap
-                        variant="body2"
-                      >
-                        {queue.orderQueue}
-                      </Typography>
-                    </div>
+                    {i18n.t("queues.table.name")}
                   </TableCell>
                   <TableCell align="center">
-                    <div className={classes.customTableCell}>
-                      <Typography
-                        style={{ width: 300, align: "center" }}
-                        noWrap
-                        variant="body2"
-                      >
-                        {queue.greetingMessage}
-                      </Typography>
-                    </div>
+                    {i18n.t("queues.table.color")}
                   </TableCell>
                   <TableCell align="center">
-                    <IconButton
-                      size="small"
-                      onClick={() => handleEditQueue(queue)}
-                    >
-                      <Edit />
-                    </IconButton>
-
-                    <IconButton
-                      size="small"
-                      onClick={() => {
-                        setSelectedQueue(queue);
-                        setConfirmModalOpen(true);
-                      }}
-                    >
-                      <DeleteOutline />
-                    </IconButton>
+                    {i18n.t("queues.table.orderQueue")}
+                  </TableCell>
+                  <TableCell align="center">
+                    {i18n.t("queues.table.greeting")}
+                  </TableCell>
+                  <TableCell align="center">
+                    {i18n.t("queues.table.actions")}
                   </TableCell>
                 </TableRow>
-              ))}
-              {loading && <TableRowSkeleton columns={4} />}
-            </>
-          </TableBody>
-        </Table>
-      </Paper>
+              </TableHead>
+              <TableBody>
+                <>
+                  {queues.map((queue) => (
+                    <TableRow key={queue.id}>
+                      <TableCell align="center">{queue.id}</TableCell>
+                      <TableCell align="center">{queue.name}</TableCell>
+                      <TableCell align="center">
+                        <div className={classes.customTableCell}>
+                          <span
+                            style={{
+                              backgroundColor: queue.color,
+                              width: 60,
+                              height: 20,
+                              alignSelf: "center",
+                            }}
+                          />
+                        </div>
+                      </TableCell>
+                      <TableCell align="center">
+                        <div className={classes.customTableCell}>
+                          <Typography
+                            style={{ width: 300, align: "center" }}
+                            noWrap
+                            variant="body2"
+                          >
+                            {queue.orderQueue}
+                          </Typography>
+                        </div>
+                      </TableCell>
+                      <TableCell align="center">
+                        <div className={classes.customTableCell}>
+                          <Typography
+                            style={{ width: 300, align: "center" }}
+                            noWrap
+                            variant="body2"
+                          >
+                            {queue.greetingMessage}
+                          </Typography>
+                        </div>
+                      </TableCell>
+                      <TableCell align="center">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleEditQueue(queue)}
+                        >
+                          <Edit />
+                        </IconButton>
+
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            setSelectedQueue(queue);
+                            setConfirmModalOpen(true);
+                          }}
+                        >
+                          <DeleteOutline />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {loading && <TableRowSkeleton columns={4} />}
+                </>
+              </TableBody>
+            </Table>
+          </Paper>
+        </>}
     </MainContainer>
   );
 };

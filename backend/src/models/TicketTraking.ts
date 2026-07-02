@@ -7,13 +7,17 @@ import {
   PrimaryKey,
   ForeignKey,
   BelongsTo,
-  AutoIncrement
+  AutoIncrement,
+  HasMany
 } from "sequelize-typescript";
 
 import Company from "./Company";
 import User from "./User";
 import Ticket from "./Ticket";
 import Whatsapp from "./Whatsapp";
+import Rating from "./Files";
+import Message from "./Message";
+import Queue from "./Queue";
 
 @Table({
   tableName: "TicketTraking"
@@ -68,6 +72,9 @@ class TicketTraking extends Model<TicketTraking> {
   queuedAt: Date;
 
   @Column
+  closedAt: Date;
+
+  @Column
   finishedAt: Date;
 
   @Column
@@ -75,6 +82,16 @@ class TicketTraking extends Model<TicketTraking> {
 
   @Column
   chatbotAt: Date;
+
+  @ForeignKey(() => Queue)
+  @Column
+  queueId: number;
+
+  @BelongsTo(() => Queue)
+  queue: Queue;
+
+  @HasMany(() => Message)
+  message: Message[];  
 }
 
 export default TicketTraking;

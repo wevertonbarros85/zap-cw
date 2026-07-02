@@ -1,11 +1,18 @@
 import AppError from "../../errors/AppError";
-import CheckContactOpenTickets from "../../helpers/CheckContactOpenTickets";
+
+import { Op } from "sequelize";
 import GetDefaultWhatsApp from "../../helpers/GetDefaultWhatsApp";
+import GetDefaultWhatsAppByUser from "../../helpers/GetDefaultWhatsAppByUser";
 import Ticket from "../../models/Ticket";
 import ShowContactService from "../ContactServices/ShowContactService";
 import { getIO } from "../../libs/socket";
-import GetDefaultWhatsAppByUser from "../../helpers/GetDefaultWhatsAppByUser";
 import ShowWhatsAppService from "../WhatsappService/ShowWhatsAppService";
+import Queue from "../../models/Queue";
+import User from "../../models/User";
+import CheckContactOpenTickets from "../../helpers/CheckContactOpenTickets";
+
+import CreateLogTicketService from "./CreateLogTicketService";
+import ShowTicketService from "./ShowTicketService";
 
 interface Request {
   contactId: number;
@@ -13,7 +20,7 @@ interface Request {
   userId: number;
   companyId: number;
   queueId?: number;
-  whatsappId?: string;
+  whatsappId: string;
 }
 
 const CreateTicketService = async ({
@@ -22,15 +29,21 @@ const CreateTicketService = async ({
   userId,
   queueId,
   companyId,
-  whatsappId
+  whatsappId = ""
 }: Request): Promise<Ticket> => {
-  let whatsapp;
 
-  if (whatsappId !== undefined && whatsappId !== null && whatsappId !==  "") {
+  const io = getIO();
+
+  let whatsapp;
+  let defaultWhatsapp
+
+  if (whatsappId !== "undefined" && whatsappId !== null && whatsappId !== "") {
+    // console.log("GETTING WHATSAPP CREATE TICKETSERVICE", whatsappId)
     whatsapp = await ShowWhatsAppService(whatsappId, companyId)
   }
+
   
-  let defaultWhatsapp = await GetDefaultWhatsAppByUser(userId);
+  defaultWhatsapp = await GetDefaultWhatsAppByUser(userId);
 
   if (whatsapp) {
     defaultWhatsapp = whatsapp;
@@ -38,42 +51,49 @@ const CreateTicketService = async ({
   if (!defaultWhatsapp)
     defaultWhatsapp = await GetDefaultWhatsApp(companyId);
 
-  await CheckContactOpenTickets(contactId, whatsappId);
+  // console.log("defaultWhatsapp", defaultWhatsapp.id, defaultWhatsapp.channel)
+  await CheckContactOpenTickets(contactId, defaultWhatsapp.id);
 
   const { isGroup } = await ShowContactService(contactId, companyId);
 
-  const [{ id }] = await Ticket.findOrCreate({
-    where: {
-      contactId,
-      companyId,
-      whatsappId
-    },
-    defaults: {
-      contactId,
-      companyId,
-      whatsappId: defaultWhatsapp.id,
-      status,
-      isGroup,
-      userId
-    }
+  let ticket = await Ticket.create({
+    contactId,
+    companyId,
+    whatsappId: defaultWhatsapp.id,
+    channel: defaultWhatsapp.channel,
+    isGroup,
+    userId,
+    isBot: true,
+    queueId,
+    status: isGroup ? "group" : "open",
+    isActiveDemand: true
   });
 
-  await Ticket.update(
-    { companyId, queueId, userId, whatsappId: defaultWhatsapp.id, status: "open" },
-    { where: { id } }
-  );
+  // await Ticket.update(
+  //   { companyId, queueId, userId, status: isGroup? "group": "open", isBot: true },
+  //   { where: { id } }
+  // );
 
-  const ticket = await Ticket.findByPk(id, { include: ["contact", "queue"] });
+  ticket = await ShowTicketService(ticket.id, companyId);
 
   if (!ticket) {
     throw new AppError("ERR_CREATING_TICKET");
   }
 
-  const io = getIO();
+  io.of(String(companyId))
+    // .to(ticket.status)
+    // .to("notification")
+    // .to(ticket.id.toString())
+    .emit(`company-${companyId}-ticket`, {
+      action: "update",
+      ticket
+    });
 
-  io.to(ticket.id.toString()).emit("ticket", {
-    action: "update",
-    ticket
+  await CreateLogTicketService({
+    userId,
+    queueId,
+    ticketId: ticket.id,
+    type: "create"
   });
 
   return ticket;

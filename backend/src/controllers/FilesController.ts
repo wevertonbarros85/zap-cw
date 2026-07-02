@@ -11,6 +11,8 @@ import ShowService from "../services/FileServices/ShowService";
 import DeleteService from "../services/FileServices/DeleteService";
 import SimpleListService from "../services/FileServices/SimpleListService";
 import DeleteAllService from "../services/FileServices/DeleteAllService";
+import ShowTicketService from "../services/TicketServices/ShowTicketService";
+import UpdateTicketService from "../services/TicketServices/UpdateTicketService";
 import FilesOptions from "../models/FilesOptions";
 
 type IndexQuery = {
@@ -43,10 +45,11 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   });
 
   const io = getIO();
-  io.to(`company-${companyId}-mainchannel`).emit(`company${companyId}-file`, {
-    action: "create",
-    fileList
-  });
+  io.of(String(companyId))
+    .emit(`company${companyId}-file`, {
+      action: "create",
+      fileList
+    });
 
   return res.status(200).json(fileList);
 };
@@ -66,7 +69,7 @@ export const uploadMedias = async (req: Request, res: Response): Promise<Respons
   const file = head(files);
 
   try {
-    
+
     let fileOpt
     if (files.length > 0) {
 
@@ -74,17 +77,17 @@ export const uploadMedias = async (req: Request, res: Response): Promise<Respons
         fileOpt = await FilesOptions.findOne({
           where: {
             fileId,
-            id: Array.isArray(id)? id[index] : id
+            id: Array.isArray(id) ? id[index] : id
           }
         });
 
-        fileOpt.update({
-          path: file.filename.replace('/','-'),
-          mediaType: Array.isArray(mediaType)? mediaType[index] : mediaType
-        }) ;
+        await fileOpt.update({
+          path: `/company${req.user.companyId}/fileList/${fileId}/${file.filename.replace('/', '-')}`,
+          mediaType: Array.isArray(mediaType) ? mediaType[index] : mediaType
+        });
       }
     }
-    
+
     return res.send({ mensagem: "Arquivos atualizados" });
   } catch (err: any) {
     throw new AppError(err.message);
@@ -106,14 +109,15 @@ export const update = async (
   const fileList = await UpdateService({ fileData, id: fileId, companyId });
 
   const io = getIO();
-  io.to(`company-${companyId}-mainchannel`).emit(`company${companyId}-file`, {
+  io.of(String(companyId))
+  .emit(`company${companyId}-file`, {
     action: "update",
     fileList
   });
 
   return res.status(200).json(fileList);
 };
-    
+
 
 export const remove = async (
   req: Request,
@@ -125,7 +129,8 @@ export const remove = async (
   await DeleteService(fileId, companyId);
 
   const io = getIO();
-  io.to(`company-${companyId}-mainchannel`).emit(`company${companyId}-file`, {
+  io.of(String(companyId))
+  .emit(`company${companyId}-file`, {
     action: "delete",
     fileId
   });

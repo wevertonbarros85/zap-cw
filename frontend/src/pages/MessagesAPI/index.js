@@ -1,22 +1,29 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { useHistory } from "react-router-dom";
 import { makeStyles } from "@material-ui/core/styles";
 import Paper from "@material-ui/core/Paper";
 
 import { i18n } from "../../translate/i18n";
-import { Button, CircularProgress, Grid, TextField, Typography } from "@material-ui/core";
+import {
+  Button,
+  CircularProgress,
+  Grid,
+  TextField,
+  Typography,
+} from "@material-ui/core";
 import { Field, Form, Formik } from "formik";
 import toastError from "../../errors/toastError";
 import { toast } from "react-toastify";
-// import api from "../../services/api";
+
 import axios from "axios";
 import usePlans from "../../hooks/usePlans";
+import { AuthContext } from "../../context/Auth/AuthContext";
 
 const useStyles = makeStyles((theme) => ({
   mainPaper: {
     flex: 1,
     padding: theme.spacing(2),
-    paddingBottom: 100
+    paddingBottom: 100,
   },
   mainHeader: {
     marginTop: theme.spacing(1),
@@ -28,28 +35,44 @@ const useStyles = makeStyles((theme) => ({
     maxWidth: 500,
   },
   textRight: {
-    textAlign: "right"
-  }
+    textAlign: "right",
+  },
 }));
 
 const MessagesAPI = () => {
   const classes = useStyles();
   const history = useHistory();
 
-  const [formMessageTextData,] = useState({ token: '', number: '', body: '' })
-  const [formMessageMediaData,] = useState({ token: '', number: '', medias: '' })
-  const [file, setFile] = useState({})
+  const [formMessageTextData] = useState({
+    token: "",
+    number: "",
+    body: "",
+    userId: "",
+    queueId: "",
+  });
+  const [formMessageMediaData] = useState({
+    token: "",
+    number: "",
+    medias: "",
+    body: "",
+    userId: "",
+    queueId: "",
+  });
+  const [file, setFile] = useState({});
+  const { user, socket } = useContext(AuthContext);
 
   const { getPlanCompany } = usePlans();
 
   useEffect(() => {
     async function fetchData() {
-      const companyId = localStorage.getItem("companyId");
+      const companyId = user.companyId;
       const planConfigs = await getPlanCompany(undefined, companyId);
       if (!planConfigs.plan.useExternalApi) {
-        toast.error("messagesAPI.toasts.unauthorized");
+        toast.error(
+          "Esta empresa não possui permissão para acessar essa página! Estamos lhe redirecionando."
+        );
         setTimeout(() => {
-          history.push(`/`)
+          history.push(`/`);
         }, 1000);
       }
     }
@@ -58,49 +81,51 @@ const MessagesAPI = () => {
   }, []);
 
   const getEndpoint = () => {
-    return process.env.REACT_APP_BACKEND_URL + '/api/messages/send'
-  }
+    return process.env.REACT_APP_BACKEND_URL + "/api/messages/send";
+  };
 
   const handleSendTextMessage = async (values) => {
-    const { number, body } = values;
-    const data = { number, body };
+    const { number, body, userId, queueId } = values;
+    const data = { number, body, userId, queueId };
     try {
       await axios.request({
         url: getEndpoint(),
-        method: 'POST',
+        method: "POST",
         data,
         headers: {
-          'Content-type': 'application/json',
-          'Authorization': `Bearer ${values.token}`
-        }
-      })
-      toast.success(i18n.t('messagesAPI.toasts.success'));
+          "Content-type": "application/json",
+          Authorization: `Bearer ${values.token}`,
+        },
+      });
+      toast.success("Mensagem enviada com sucesso");
     } catch (err) {
       toastError(err);
     }
-  }
+  };
 
   const handleSendMediaMessage = async (values) => {
     try {
       const firstFile = file[0];
       const data = new FormData();
-      data.append('number', values.number);
-      data.append('body', firstFile.name);
-      data.append('medias', firstFile);
+      data.append("number", values.number);
+      data.append("body", values.body ? values.body : firstFile.name);
+      data.append("userId", values.userId);
+      data.append("queueId", values.queueId);
+      data.append("medias", firstFile);
       await axios.request({
         url: getEndpoint(),
-        method: 'POST',
+        method: "POST",
         data,
         headers: {
-          'Content-type': 'multipart/form-data',
-          'Authorization': `Bearer ${values.token}`
-        }
-      })
-      toast.success(i18n.t('messagesAPI.toasts.success'));
+          "Content-type": "multipart/form-data",
+          Authorization: `Bearer ${values.token}`,
+        },
+      });
+      toast.success("Mensagem enviada com sucesso");
     } catch (err) {
       toastError(err);
     }
-  }
+  };
 
   const renderFormMessageText = () => {
     return (
@@ -111,7 +136,7 @@ const MessagesAPI = () => {
           setTimeout(async () => {
             await handleSendTextMessage(values);
             actions.setSubmitting(false);
-            actions.resetForm()
+            actions.resetForm();
           }, 400);
         }}
         className={classes.elementMargin}
@@ -158,6 +183,30 @@ const MessagesAPI = () => {
                   required
                 />
               </Grid>
+              <Grid item xs={12} md={6}>
+                <Field
+                  as={TextField}
+                  label={i18n.t("messagesAPI.textMessage.userId")}
+                  name="userId"
+                  autoFocus
+                  variant="outlined"
+                  margin="dense"
+                  fullWidth
+                  className={classes.textField}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Field
+                  as={TextField}
+                  label={i18n.t("messagesAPI.textMessage.queueId")}
+                  name="queueId"
+                  autoFocus
+                  variant="outlined"
+                  margin="dense"
+                  fullWidth
+                  className={classes.textField}
+                />
+              </Grid>
               <Grid item xs={12} className={classes.textRight}>
                 <Button
                   type="submit"
@@ -170,15 +219,17 @@ const MessagesAPI = () => {
                       size={24}
                       className={classes.buttonProgress}
                     />
-                  ) : i18n.t('messagesAPI.buttons.send')}
+                  ) : (
+                    <>{i18n.t("messagesAPI.toSend")}</>
+                  )}
                 </Button>
               </Grid>
             </Grid>
           </Form>
         )}
       </Formik>
-    )
-  }
+    );
+  };
 
   const renderFormMessageMedia = () => {
     return (
@@ -189,9 +240,9 @@ const MessagesAPI = () => {
           setTimeout(async () => {
             await handleSendMediaMessage(values);
             actions.setSubmitting(false);
-            actions.resetForm()
-            document.getElementById('medias').files = null
-            document.getElementById('medias').value = null
+            actions.resetForm();
+            document.getElementById("medias").files = null;
+            document.getElementById("medias").value = null;
           }, 400);
         }}
         className={classes.elementMargin}
@@ -226,7 +277,49 @@ const MessagesAPI = () => {
                 />
               </Grid>
               <Grid item xs={12}>
-                <input type="file" name="medias" id="medias" required onChange={(e) => setFile(e.target.files)} />
+                <Field
+                  as={TextField}
+                  label={i18n.t("messagesAPI.textMessage.body")}
+                  name="body"
+                  autoFocus
+                  variant="outlined"
+                  margin="dense"
+                  fullWidth
+                  className={classes.textField}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Field
+                  as={TextField}
+                  label={i18n.t("messagesAPI.textMessage.userId")}
+                  name="userId"
+                  autoFocus
+                  variant="outlined"
+                  margin="dense"
+                  fullWidth
+                  className={classes.textField}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Field
+                  as={TextField}
+                  label={i18n.t("messagesAPI.textMessage.queueId")}
+                  name="queueId"
+                  autoFocus
+                  variant="outlined"
+                  margin="dense"
+                  fullWidth
+                  className={classes.textField}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <input
+                  type="file"
+                  name="medias"
+                  id="medias"
+                  required
+                  onChange={(e) => setFile(e.target.files)}
+                />
               </Grid>
               <Grid item xs={12} className={classes.textRight}>
                 <Button
@@ -240,100 +333,142 @@ const MessagesAPI = () => {
                       size={24}
                       className={classes.buttonProgress}
                     />
-                  ) : i18n.t('messagesAPI.buttons.send')}
+                  ) : (
+                    "Enviar"
+                  )}
                 </Button>
               </Grid>
             </Grid>
           </Form>
         )}
       </Formik>
-    )
-  }
+    );
+  };
 
   return (
     <Paper
       className={classes.mainPaper}
-      style={{marginLeft: "5px"}}
+      style={{ marginLeft: "5px" }}
       // className={classes.elementMargin}
       variant="outlined"
     >
-      <Typography variant="h5">
-        {i18n.t('messagesAPI.labels.doc')}
-      </Typography>
-      <Typography variant="h6" color="primary" className={classes.elementMargin}>
-        {i18n.t('messagesAPI.labels.method')}
+      <Typography variant="h5">{i18n.t("messagesAPI.API.title")}</Typography>
+      <Typography
+        variant="h6"
+        color="primary"
+        className={classes.elementMargin}
+      >
+        {i18n.t("messagesAPI.API.methods.title")}
       </Typography>
       <Typography component="div">
         <ol>
-          <li>
-            {i18n.t('messagesAPI.labels.textMessage')}
-          </li>
-          <li>
-            {i18n.t('messagesAPI.labels.mediaMessage')}
-          </li>
+          <li>{i18n.t("messagesAPI.API.methods.messagesText")}</li>
+          <li>{i18n.t("messagesAPI.API.methods.messagesMidia")}</li>
         </ol>
       </Typography>
-      <Typography variant="h6" color="primary" className={classes.elementMargin}>
-        {i18n.t('messagesAPI.labels.instructions')}
+      <Typography
+        variant="h6"
+        color="primary"
+        className={classes.elementMargin}
+      >
+        {i18n.t("messagesAPI.API.instructions.title")}
       </Typography>
       <Typography className={classes.elementMargin} component="div">
-        <b>{i18n.t('messagesAPI.labels.observations')}</b><br />
+        <b>{i18n.t("messagesAPI.API.instructions.comments")}</b>
+        <br />
         <ul>
-          <li>{i18n.t('messagesAPI.labels.before1')} <br />{i18n.t('messagesAPI.labels.before2')}</li>
+          <li>{i18n.t("messagesAPI.API.instructions.comments1")}</li>
           <li>
-            {i18n.t('messagesAPI.labels.numberDescription')}
+            {i18n.t("messagesAPI.API.instructions.comments2")}
             <ul>
-              <li>{i18n.t('messagesAPI.labels.countryCode')}</li>
-              <li>DDD</li>
-              <li>{i18n.t('messagesAPI.labels.number')}</li>
+              <li>{i18n.t("messagesAPI.API.instructions.codeCountry")}</li>
+              <li>{i18n.t("messagesAPI.API.instructions.code")}</li>
+              <li>{i18n.t("messagesAPI.API.instructions.number")}</li>
             </ul>
           </li>
         </ul>
       </Typography>
-      <Typography variant="h6" color="primary" className={classes.elementMargin}>
-        {i18n.t('messagesAPI.labels.textMessage2')}
+      <Typography
+        variant="h6"
+        color="primary"
+        className={classes.elementMargin}
+      >
+        {i18n.t("messagesAPI.API.text.title")}
       </Typography>
       <Grid container>
         <Grid item xs={12} sm={6}>
           <Typography className={classes.elementMargin} component="div">
-            <p>{i18n.t('messagesAPI.labels.textMessageInstructions')}</p>
-            <b>Endpoint: </b> {getEndpoint()} <br />
-            <b>{i18n.t('messagesAPI.labels.method2')}: </b> POST <br />
-            <b>Headers: </b> Authorization (Bearer token) {i18n.t('messagesAPI.labels.e')} Content-Type (application/json) <br />
-            <b>Body: </b> {"{ \"number\": \"5599999999999\", \"body\": \"Sua mensagem\" }"}
+            <p>{i18n.t("messagesAPI.API.text.instructions")}</p>
+            <b>
+              {i18n.t("messagesAPIInstructions.endpoint")}
+            </b> {getEndpoint()} <br />
+            <b>{i18n.t("messagesAPIInstructions.method")}</b>{" "}
+            {i18n.t("messagesAPIInstructions.post")} <br />
+            <b>{i18n.t("messagesAPIInstructions.headers")}</b>{" "}
+            {i18n.t("messagesAPIInstructions.headerAuthorization")} <br />
+            <b>{i18n.t("messagesAPIInstructions.body")}</b> {"{"} <br />
+            {i18n.t("messagesAPIInstructions.fieldNumber")} <br />
+            {i18n.t("messagesAPIInstructions.fieldBody")} <br />
+            {i18n.t("messagesAPIInstructions.fieldUserId")} <br />
+            {i18n.t("messagesAPIInstructions.fieldQueueId")} <br />
+            {i18n.t("messagesAPIInstructions.fieldSendSignature")} <br />
+            {i18n.t("messagesAPIInstructions.fieldCloseTicket")} <br />
+            {"}"}
           </Typography>
         </Grid>
         <Grid item xs={12} sm={6}>
           <Typography className={classes.elementMargin}>
-            <b>{i18n.t('messagesAPI.labels.tests')}</b>
+            <b>{i18n.t("messagesAPIInstructions.testSend")}</b>
           </Typography>
           {renderFormMessageText()}
         </Grid>
       </Grid>
-      <Typography variant="h6" color="primary" className={classes.elementMargin}>
-        {i18n.t('messagesAPI.labels.mediaMessage2')}
+      <Typography
+        variant="h6"
+        color="primary"
+        className={classes.elementMargin}
+      >
+        {i18n.t("messagesAPI.API.media.title")}
       </Typography>
       <Grid container>
         <Grid item xs={12} sm={6}>
           <Typography className={classes.elementMargin} component="div">
-            <p>{i18n.t('messagesAPI.labels.textMessageInstructions')}</p>
+            <p>{i18n.t("messagesAPI.API.media.instructions")}</p>
             <b>Endpoint: </b> {getEndpoint()} <br />
-            <b>{i18n.t('messagesAPI.labels.method2')}: </b> POST <br />
-            <b>Headers: </b> Authorization (Bearer token) {i18n.t('messagesAPI.labels.e')} Content-Type (multipart/form-data) <br />
+            <b>Método: </b> POST <br />
+            <b>Headers: </b> Authorization Bearer (token cadastrado) e
+            Content-Type (multipart/form-data) <br />
             <b>FormData: </b> <br />
             <ul>
               <li>
-                <b>number: </b> 5599999999999
+                <b>number: </b> 558599999999
+              </li>
+              <li>
+                <b>body:</b> Message
+              </li>
+              <li>
+                <b>userId:</b> ID usuário ou ""
+              </li>
+              <li>
+                <b>queueId:</b> ID da fila ou ""
               </li>
               <li>
                 <b>medias: </b> arquivo
+              </li>
+              <li>
+                <b>sendSignature:</b>{" "}
+                {i18n.t("messagesAPIInstructions.singMessage")} <br />
+              </li>
+              <li>
+                <b>closeTicket:</b>{" "}
+                {i18n.t("messagesAPIInstructions.closeTicket")} <br />
               </li>
             </ul>
           </Typography>
         </Grid>
         <Grid item xs={12} sm={6}>
           <Typography className={classes.elementMargin}>
-            <b>{i18n.t('messagesAPI.labels.tests')}</b>
+            <b>{i18n.t("messagesAPIInstructions.testSend")}</b>
           </Typography>
           {renderFormMessageMedia()}
         </Grid>

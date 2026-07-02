@@ -18,15 +18,54 @@ interface Request {
   isDefault?: boolean;
   token?: string;
   provider?: string;
-  //sendIdQueue?: number;
-  //timeSendQueue?: number;
-  transferQueueId?: number;
-  timeToTransfer?: number;    
-  promptId?: number;
-  maxUseBotQueues?: number;
-  timeUseBotQueues?: number;
+  facebookUserId?: string;
+  facebookUserToken?: string;
+  tokenMeta?: string;
+  channel?: string;
+  facebookPageUserId?: string;
+  maxUseBotQueues?: string;
+  timeUseBotQueues?: string;
   expiresTicket?: number;
+  allowGroup?: boolean;
+  sendIdQueue?: number;
+  timeSendQueue?: number;
+  timeInactiveMessage?: string;
+  inactiveMessage?: string;
+  maxUseBotQueuesNPS?: number;
+  expiresTicketNPS?: number;
+  whenExpiresTicket?: string;
   expiresInactiveMessage?: string;
+  groupAsTicket?: string;
+  importOldMessages?: string;
+  importRecentMessages?: string;
+  importOldMessagesGroups?: boolean;
+  closedTicketsPostImported?: boolean;
+  timeCreateNewTicket?: number;
+  integrationId?: number;
+  integrationTypeId?: number;
+  schedules?: any[];
+  promptId?: number;
+  collectiveVacationMessage?: string;
+  collectiveVacationStart?: string;
+  collectiveVacationEnd?: string;
+  queueIdImportMessages?: number;
+  phone_number_id?: string;
+  waba_id?: string;
+  send_token?: string;
+  business_id?: string;
+  phone_number?: string;
+  waba_webhook?: string;
+  flowIdNotPhrase?: number;
+  flowIdWelcome?: number;
+  color?: string;
+  flowIdInactiveTime?: number;
+  flowInactiveTime?: number;
+  maxUseInactiveTime?: number;
+  timeToReturnQueue?: number;
+  timeAwaitActiveFlowId?: number;
+  timeAwaitActiveFlow?: number;
+  triggerIntegrationOnClose?: boolean;
+  wavoip?: string;
 }
 
 interface Response {
@@ -41,20 +80,59 @@ const CreateWhatsAppService = async ({
   greetingMessage,
   complationMessage,
   outOfHoursMessage,
-  ratingMessage,
   isDefault = false,
   companyId,
   token = "",
   provider = "beta",
-  //timeSendQueue,
-  //sendIdQueue,
-  transferQueueId,
-  timeToTransfer,    
+  facebookUserId,
+  facebookUserToken,
+  facebookPageUserId,
+  tokenMeta,
+  channel = "whatsapp",
+  maxUseBotQueues,
+  timeUseBotQueues,
+  expiresTicket,
+  allowGroup = false,
+  timeSendQueue,
+  sendIdQueue,
+  timeInactiveMessage,
+  inactiveMessage,
+  ratingMessage,
+  maxUseBotQueuesNPS,
+  expiresTicketNPS,
+  whenExpiresTicket,
+  expiresInactiveMessage,
+  groupAsTicket,
+  importOldMessages,
+  importRecentMessages,
+  closedTicketsPostImported,
+  importOldMessagesGroups,
+  timeCreateNewTicket,
+  integrationId,
+  integrationTypeId,
+  schedules,
   promptId,
-  maxUseBotQueues = 3,
-  timeUseBotQueues = 0,
-  expiresTicket = 0,
-  expiresInactiveMessage = ""
+  collectiveVacationEnd,
+  collectiveVacationMessage,
+  collectiveVacationStart,
+  queueIdImportMessages,
+  phone_number_id,
+  waba_id,
+  send_token,
+  business_id,
+  phone_number,
+  waba_webhook,
+  flowIdNotPhrase,
+  flowIdWelcome,
+  flowIdInactiveTime,
+  flowInactiveTime,
+  maxUseInactiveTime,
+  color,
+  timeToReturnQueue,
+  timeAwaitActiveFlowId,
+  timeAwaitActiveFlow,
+  triggerIntegrationOnClose,
+  wavoip
 }: Request): Promise<Response> => {
   const company = await Company.findOne({
     where: {
@@ -66,7 +144,8 @@ const CreateWhatsAppService = async ({
   if (company !== null) {
     const whatsappCount = await Whatsapp.count({
       where: {
-        companyId
+        companyId,
+        channel: channel
       }
     });
 
@@ -79,15 +158,15 @@ const CreateWhatsAppService = async ({
 
   const schema = Yup.object().shape({
     name: Yup.string()
-      .required()
-      .min(2)
+      .required("ERR_WAPP_NAME_REQUIRED")
+      .min(2, "ERR_WAPP_INVALID_NAME")
       .test(
         "Check-name",
         "Esse nome já está sendo utilizado por outra conexão",
         async value => {
           if (!value) return false;
           const nameExists = await Whatsapp.findOne({
-            where: { name: value }
+            where: { name: value, channel: channel, companyId }
           });
           return !nameExists;
         }
@@ -103,13 +182,13 @@ const CreateWhatsAppService = async ({
 
   const whatsappFound = await Whatsapp.findOne({ where: { companyId } });
 
-  isDefault = !whatsappFound;
+  isDefault = channel === "whatsapp" ? !whatsappFound : false;
 
   let oldDefaultWhatsapp: Whatsapp | null = null;
 
-  if (isDefault) {
+  if (channel === "whatsapp" && isDefault) {
     oldDefaultWhatsapp = await Whatsapp.findOne({
-      where: { isDefault: true, companyId }
+      where: { isDefault: true, companyId, channel: channel }
     });
     if (oldDefaultWhatsapp) {
       await oldDefaultWhatsapp.update({ isDefault: false, companyId });
@@ -131,7 +210,7 @@ const CreateWhatsAppService = async ({
           async value => {
             if (!value) return false;
             const tokenExists = await Whatsapp.findOne({
-              where: { token: value }
+              where: { token: value, channel: channel }
             });
             return !tokenExists;
           }
@@ -157,17 +236,56 @@ const CreateWhatsAppService = async ({
       companyId,
       token,
       provider,
-      //timeSendQueue,
-      //sendIdQueue,
-	  transferQueueId,
-	  timeToTransfer,	  
-      promptId,
+      channel,
+      facebookUserId,
+      facebookUserToken,
+      facebookPageUserId,
+      tokenMeta,
       maxUseBotQueues,
       timeUseBotQueues,
       expiresTicket,
-      expiresInactiveMessage
+      allowGroup,
+      timeSendQueue,
+      sendIdQueue,
+      timeInactiveMessage,
+      inactiveMessage,
+      maxUseBotQueuesNPS,
+      expiresTicketNPS,
+      whenExpiresTicket,
+      expiresInactiveMessage,
+      groupAsTicket,
+      importOldMessages,
+      importRecentMessages,
+      closedTicketsPostImported,
+      importOldMessagesGroups,
+      timeCreateNewTicket,
+      integrationId,
+      integrationTypeId,
+      schedules,
+      promptId,
+      collectiveVacationEnd,
+      collectiveVacationMessage,
+      collectiveVacationStart,
+      queueIdImportMessages,
+      phone_number_id,
+      waba_id,
+      send_token,
+      business_id,
+      phone_number,
+      waba_webhook,
+      flowIdNotPhrase,
+      flowIdWelcome,
+      flowIdInactiveTime,
+      flowInactiveTime,
+      maxUseInactiveTime,
+      color,
+      timeToReturnQueue,
+      timeAwaitActiveFlowId,
+      timeAwaitActiveFlow,
+      triggerIntegrationOnClose,
+      wavoip
     },
-    { include: ["queues"] }
+    { include: ["queues", "company"] }
   );
 
   await AssociateWhatsappQueue(whatsapp, queueIds);

@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useReducer, useCallback, useContext } from "react";
+import React, {
+  useState,
+  useEffect,
+  useReducer,
+  useCallback,
+  useContext,
+} from "react";
 import { toast } from "react-toastify";
 import { useHistory } from "react-router-dom";
 import { makeStyles } from "@material-ui/core/styles";
@@ -12,11 +18,12 @@ import Title from "../../components/Title";
 import api from "../../services/api";
 import { i18n } from "../../translate/i18n";
 import MainHeaderButtonsWrapper from "../../components/MainHeaderButtonsWrapper";
+// import MessageModal from "../../components/MessageModal"
 import ScheduleModal from "../../components/ScheduleModal";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import toastError from "../../errors/toastError";
 import moment from "moment";
-import { SocketContext } from "../../context/Socket/SocketContext";
+// import { SocketContext } from "../../context/Socket/SocketContext";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import usePlans from "../../hooks/usePlans";
 import { Calendar, momentLocalizer } from "react-big-calendar";
@@ -27,7 +34,6 @@ import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
 import EditIcon from "@material-ui/icons/Edit";
 
 import "./Schedules.css"; // Importe o arquivo CSS
-import { createMomentLocalizer } from "../../translate/calendar-locale";
 
 // Defina a função getUrlParam antes de usá-la
 function getUrlParam(paramName) {
@@ -42,30 +48,43 @@ const eventTitleStyle = {
   textOverflow: "ellipsis", // Exiba "..." se o texto for muito longo
 };
 
+const localizer = momentLocalizer(moment);
 var defaultMessages = {
-  date: i18n.t("schedules.messages.date"),
-  time: i18n.t("schedules.messages.time"),
-  event: i18n.t("schedules.messages.event"),
-  allDay: i18n.t("schedules.messages.allDay"),
-  week: i18n.t("schedules.messages.week"),
-  work_week: i18n.t("schedules.messages.work_week"),
-  day: i18n.t("schedules.messages.day"),
-  month: i18n.t("schedules.messages.month"),
-  previous: i18n.t("schedules.messages.previous"),
-  next: i18n.t("schedules.messages.next"),
-  yesterday: i18n.t("schedules.messages.yesterday"),
-  tomorrow: i18n.t("schedules.messages.tomorrow"),
-  today: i18n.t("schedules.messages.today"),
-  agenda: i18n.t("schedules.messages.agenda"),
-  noEventsInRange: i18n.t("schedules.messages.noEventsInRange"),
+  date: i18n.t("schedules.date"),
+  time: i18n.t("schedules.time"),
+  event: i18n.t("schedules.event"),
+  allDay: i18n.t("schedules.allDay"),
+  week: i18n.t("schedules.week"),
+  work_week: i18n.t("schedules.work_week"),
+  day: i18n.t("schedules.day"),
+  month: i18n.t("schedules.month"),
+  previous: i18n.t("schedules.previous"),
+  next: i18n.t("schedules.next"),
+  yesterday: i18n.t("schedules.yesterday"),
+  tomorrow: i18n.t("schedules.tomorrow"),
+  today: i18n.t("schedules.today"),
+  agenda: i18n.t("schedules.agenda"),
+  noEventsInRange: i18n.t("schedules.noEventsInRange"),
   showMore: function showMore(total) {
-    return "+" + total + " " + i18n.t("schedules.messages.showMore");
-  }
+    return "+" + total + " mais";
+  },
 };
 
 const reducer = (state, action) => {
   if (action.type === "LOAD_SCHEDULES") {
-    return [...state, ...action.payload];
+    const schedules = action.payload;
+    const newSchedules = [];
+
+    schedules.forEach((schedule) => {
+      const scheduleIndex = state.findIndex((s) => s.id === schedule.id);
+      if (scheduleIndex !== -1) {
+        state[scheduleIndex] = schedule;
+      } else {
+        newSchedules.push(schedule);
+      }
+    });
+
+    return [...state, ...newSchedules];
   }
 
   if (action.type === "UPDATE_SCHEDULES") {
@@ -82,14 +101,17 @@ const reducer = (state, action) => {
 
   if (action.type === "DELETE_SCHEDULE") {
     const scheduleId = action.payload;
-    return state.filter((s) => s.id !== scheduleId);
+
+    const scheduleIndex = state.findIndex((s) => s.id === scheduleId);
+    if (scheduleIndex !== -1) {
+      state.splice(scheduleIndex, 1);
+    }
+    return [...state];
   }
 
   if (action.type === "RESET") {
     return [];
   }
-
-  return state;
 };
 
 const useStyles = makeStyles((theme) => ({
@@ -99,14 +121,34 @@ const useStyles = makeStyles((theme) => ({
     overflowY: "scroll",
     ...theme.scrollbarStyles,
   },
+  calendarToolbar: {
+    "& .rbc-toolbar-label": {
+      color: theme.mode === "light" ? theme.palette.light : "white",
+    },
+    "& .rbc-btn-group button": {
+      color: theme.mode === "light" ? theme.palette.light : "white",
+      "&:hover": {
+        color: theme.palette.mode === "dark" ? "#fff" : "#000",
+      },
+      "&:active": {
+        color: theme.palette.mode === "dark" ? "#fff" : "#000",
+      },
+      "&:focus": {
+        color: theme.palette.mode === "dark" ? "#fff" : "#000",
+      },
+      "&.rbc-active": {
+        color: theme.palette.mode === "dark" ? "#fff" : "#000",
+      },
+    },
+  },
 }));
 
 const Schedules = () => {
-  const localizer = createMomentLocalizer();
   const classes = useStyles();
   const history = useHistory();
 
-  const { user } = useContext(AuthContext);
+  //   const socketManager = useContext(SocketContext);
+  const { user, socket } = useContext(AuthContext);
 
   const [loading, setLoading] = useState(false);
   const [pageNumber, setPageNumber] = useState(1);
@@ -119,10 +161,27 @@ const Schedules = () => {
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [contactId, setContactId] = useState(+getUrlParam("contactId"));
 
+  const { getPlanCompany } = usePlans();
+
+  useEffect(() => {
+    async function fetchData() {
+      const companyId = user.companyId;
+      const planConfigs = await getPlanCompany(undefined, companyId);
+      if (!planConfigs.plan.useSchedules) {
+        toast.error(
+          "Esta empresa não possui permissão para acessar essa página! Estamos lhe redirecionando."
+        );
+        setTimeout(() => {
+          history.push(`/`);
+        }, 1000);
+      }
+    }
+    fetchData();
+  }, [user, history, getPlanCompany]);
 
   const fetchSchedules = useCallback(async () => {
     try {
-      const { data } = await api.get("/schedules/", {
+      const { data } = await api.get("/schedules", {
         params: { searchParam, pageNumber },
       });
 
@@ -139,8 +198,6 @@ const Schedules = () => {
       handleOpenScheduleModal();
     }
   }, [contactId]);
-
-  const socketManager = useContext(SocketContext);
 
   useEffect(() => {
     dispatch({ type: "RESET" });
@@ -162,10 +219,10 @@ const Schedules = () => {
   ]);
 
   useEffect(() => {
-    handleOpenScheduleModalFromContactId();
-    const socket = socketManager.getSocket(user.companyId);
+    // handleOpenScheduleModalFromContactId();
+    // const socket = socketManager.GetSocket(user.companyId, user.id);
 
-    socket.on(`company${user.companyId}-schedule`, (data) => {
+    const onCompanySchedule = (data) => {
       if (data.action === "update" || data.action === "create") {
         dispatch({ type: "UPDATE_SCHEDULES", payload: data.schedule });
       }
@@ -173,12 +230,14 @@ const Schedules = () => {
       if (data.action === "delete") {
         dispatch({ type: "DELETE_SCHEDULE", payload: +data.scheduleId });
       }
-    });
+    };
+
+    socket.on(`company${user.companyId}-schedule`, onCompanySchedule);
 
     return () => {
-      socket.disconnect();
+      socket.off(`company${user.companyId}-schedule`, onCompanySchedule);
     };
-  }, [handleOpenScheduleModalFromContactId, socketManager, user]);
+  }, [socket]);
 
   const cleanContact = () => {
     setContactId("");
@@ -251,17 +310,22 @@ const Schedules = () => {
       >
         {i18n.t("schedules.confirmationModal.deleteMessage")}
       </ConfirmationModal>
-      <ScheduleModal
-        open={scheduleModalOpen}
-        onClose={handleCloseScheduleModal}
-        reload={fetchSchedules}
-        aria-labelledby="form-dialog-title"
-        scheduleId={selectedSchedule && selectedSchedule.id}
-        contactId={contactId}
-        cleanContact={cleanContact}
-      />
+      {scheduleModalOpen && (
+        <ScheduleModal
+          open={scheduleModalOpen}
+          onClose={handleCloseScheduleModal}
+          reload={fetchSchedules}
+          // aria-labelledby="form-dialog-title"
+          scheduleId={selectedSchedule ? selectedSchedule.id : null}
+          contactId={contactId}
+          cleanContact={cleanContact}
+          user={user}
+        />
+      )}
       <MainHeader>
-        <Title>{i18n.t("schedules.title")} ({schedules.length})</Title>
+        <Title>
+          {i18n.t("schedules.title")} ({schedules.length})
+        </Title>
         <MainHeaderButtonsWrapper>
           <TextField
             placeholder={i18n.t("contacts.searchPlaceholder")}
@@ -285,18 +349,22 @@ const Schedules = () => {
           </Button>
         </MainHeaderButtonsWrapper>
       </MainHeader>
-      <Paper className={classes.mainPaper} variant="outlined" onScroll={handleScroll}>
+      <Paper
+        className={classes.mainPaper}
+        variant="outlined"
+        onScroll={handleScroll}
+      >
         <Calendar
           messages={defaultMessages}
           formats={{
-          agendaDateFormat: "DD/MM ddd",
-          weekdayFormat: "dddd"
-      }}
+            agendaDateFormat: "DD/MM ddd",
+            weekdayFormat: "dddd",
+          }}
           localizer={localizer}
           events={schedules.map((schedule) => ({
             title: (
-              <div className="event-container">
-                <div style={eventTitleStyle}>{schedule.contact.name}</div>
+              <div key={schedule.id} className="event-container">
+                <div style={eventTitleStyle}>{schedule?.contact?.name}</div>
                 <DeleteOutlineIcon
                   onClick={() => handleDeleteSchedule(schedule.id)}
                   className="delete-icon"
@@ -316,6 +384,7 @@ const Schedules = () => {
           startAccessor="start"
           endAccessor="end"
           style={{ height: 500 }}
+          className={classes.calendarToolbar}
         />
       </Paper>
     </MainContainer>

@@ -30,7 +30,9 @@ import ConfirmationModal from "../../components/ConfirmationModal";
 import toastError from "../../errors/toastError";
 import { Grid } from "@material-ui/core";
 import { isArray } from "lodash";
-import { SocketContext } from "../../context/Socket/SocketContext";
+// import { SocketContext } from "../../context/Socket/SocketContext";
+
+
 import { AuthContext } from "../../context/Auth/AuthContext";
 
 const reducer = (state, action) => {
@@ -95,7 +97,9 @@ const Announcements = () => {
   const classes = useStyles();
   const history = useHistory();
 
-  const { user } = useContext(AuthContext);
+//   const socketManager = useContext(SocketContext);
+  const { user, socket } = useContext(AuthContext);
+
 
   const [loading, setLoading] = useState(false);
   const [pageNumber, setPageNumber] = useState(1);
@@ -107,13 +111,11 @@ const Announcements = () => {
   const [searchParam, setSearchParam] = useState("");
   const [announcements, dispatch] = useReducer(reducer, []);
 
-  const socketManager = useContext(SocketContext);
-
   // trava para nao acessar pagina que não pode  
   useEffect(() => {
     async function fetchData() {
       if (!user.super) {
-        toast.error(i18n.t("announcements.toasts.info"));
+        toast.error("Esta empresa não possui permissão para acessar essa página! Estamos lhe redirecionando.");
         setTimeout(() => {
           history.push(`/`)
         }, 1000);
@@ -138,21 +140,25 @@ const Announcements = () => {
   }, [searchParam, pageNumber]);
 
   useEffect(() => {
-    const companyId = user.companyId;
-    const socket = socketManager.getSocket(companyId);
+    if (user.companyId && socket) {
+//    const socket = socketManager.GetSocket();
 
-    socket.on(`company-announcement`, (data) => {
-      if (data.action === "update" || data.action === "create") {
-        dispatch({ type: "UPDATE_ANNOUNCEMENTS", payload: data.record });
+      const onCompanyAnnouncement = (data) => {
+        if (data.action === "update" || data.action === "create") {
+          dispatch({ type: "UPDATE_ANNOUNCEMENTS", payload: data.record });
+        }
+        if (data.action === "delete") {
+          dispatch({ type: "DELETE_ANNOUNCEMENT", payload: +data.id });
+        }
       }
-      if (data.action === "delete") {
-        dispatch({ type: "DELETE_ANNOUNCEMENT", payload: +data.id });
+
+      socket.on(`company-announcement`, onCompanyAnnouncement);
+      return () => {
+        socket.off(`company-announcement`, onCompanyAnnouncement);
       }
-    });
-    return () => {
-      socket.disconnect();
-    };
-  }, [socketManager, user.companyId]);
+    }
+    return undefined;
+  }, [user]);
 
   const fetchAnnouncements = async () => {
     try {
@@ -189,10 +195,10 @@ const Announcements = () => {
   const handleDeleteAnnouncement = async (announcement) => {
     try {
       if (announcement.mediaName)
-      await api.delete(`/announcements/${announcement.id}/media-upload`);
+        await api.delete(`/announcements/${announcement.id}/media-upload`);
 
       await api.delete(`/announcements/${announcement.id}`);
-      
+
       toast.success(i18n.t("announcements.toasts.deleted"));
     } catch (err) {
       toastError(err);
@@ -216,13 +222,13 @@ const Announcements = () => {
 
   const translatePriority = (val) => {
     if (val === 1) {
-      return i18n.t("announcements.high");
+      return "Alta";
     }
     if (val === 2) {
-      return i18n.t("announcements.medium");
+      return "Média";
     }
     if (val === 3) {
-      return i18n.t("announcements.low");
+      return "Baixa";
     }
   };
 
@@ -231,7 +237,7 @@ const Announcements = () => {
       <ConfirmationModal
         title={
           deletingAnnouncement &&
-          `${i18n.t("announcements.confirmationModal.deleteTitle")} ${deletingAnnouncement.name
+          `${i18n.t("announcements.confirmationModal.deleteTitle")} ${deletingAnnouncement.title
           }?`
         }
         open={confirmModalOpen}

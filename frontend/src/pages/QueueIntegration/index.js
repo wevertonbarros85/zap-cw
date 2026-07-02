@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useReducer, useContext } from "react";
 import { toast } from "react-toastify";
-import { SocketContext } from "../../context/Socket/SocketContext";
+// import { SocketContext } from "../../context/Socket/SocketContext";
 import n8n from "../../assets/n8n.png";
 import dialogflow from "../../assets/dialogflow.png";
 import webhooks from "../../assets/webhook.png";
 import typebot from "../../assets/typebot.jpg";
+import flowbuilder from "../../assets/flowbuilders.png";
 
 import { makeStyles } from "@material-ui/core/styles";
 
@@ -20,13 +21,10 @@ import {
   TableHead,
   TableRow,
   TextField,
-  Tooltip
+  Tooltip,
 } from "@material-ui/core";
 
-import {
-  DeleteOutline,
-  Edit
-} from "@material-ui/icons";
+import { DeleteOutline, Edit } from "@material-ui/icons";
 
 import SearchIcon from "@material-ui/icons/Search";
 
@@ -44,6 +42,7 @@ import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import usePlans from "../../hooks/usePlans";
 import { useHistory } from "react-router-dom/cjs/react-router-dom.min";
+import ForbiddenPage from "../../components/ForbiddenPage";
 
 const reducer = (state, action) => {
   if (action.type === "LOAD_INTEGRATIONS") {
@@ -64,7 +63,9 @@ const reducer = (state, action) => {
 
   if (action.type === "UPDATE_INTEGRATIONS") {
     const queueIntegration = action.payload;
-    const integrationIndex = state.findIndex((u) => u.id === queueIntegration.id);
+    const integrationIndex = state.findIndex(
+      (u) => u.id === queueIntegration.id
+    );
 
     if (integrationIndex !== -1) {
       state[integrationIndex] = queueIntegration;
@@ -100,7 +101,7 @@ const useStyles = makeStyles((theme) => ({
   avatar: {
     width: "140px",
     height: "40px",
-    borderRadius: 4
+    borderRadius: 4,
   },
 }));
 
@@ -116,20 +117,22 @@ const QueueIntegration = () => {
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [searchParam, setSearchParam] = useState("");
   const [queueIntegration, dispatch] = useReducer(reducer, []);
-  const { user } = useContext(AuthContext);
+  //   const socketManager = useContext(SocketContext);
+  const { user, socket } = useContext(AuthContext);
+
   const { getPlanCompany } = usePlans();
   const companyId = user.companyId;
   const history = useHistory();
-
-  const socketManager = useContext(SocketContext);
 
   useEffect(() => {
     async function fetchData() {
       const planConfigs = await getPlanCompany(undefined, companyId);
       if (!planConfigs.plan.useIntegrations) {
-        toast.error("Esta empresa não possui permissão para acessar essa página! Estamos lhe redirecionando.");
+        toast.error(
+          "Esta empresa não possui permissão para acessar essa página! Estamos lhe redirecionando."
+        );
         setTimeout(() => {
-          history.push(`/`)
+          history.push(`/`);
         }, 1000);
       }
     }
@@ -150,7 +153,10 @@ const QueueIntegration = () => {
           const { data } = await api.get("/queueIntegration/", {
             params: { searchParam, pageNumber },
           });
-          dispatch({ type: "LOAD_INTEGRATIONS", payload: data.queueIntegrations });
+          dispatch({
+            type: "LOAD_INTEGRATIONS",
+            payload: data.queueIntegrations,
+          });
           setHasMore(data.hasMore);
           setLoading(false);
         } catch (err) {
@@ -163,23 +169,26 @@ const QueueIntegration = () => {
   }, [searchParam, pageNumber]);
 
   useEffect(() => {
-    const companyId = localStorage.getItem("companyId");
-    const socket = socketManager.getSocket(companyId);
+    // const socket = socketManager.GetSocket();
 
-    socket.on(`company-${companyId}-queueIntegration`, (data) => {
+    const onQueueEvent = (data) => {
       if (data.action === "update" || data.action === "create") {
-        dispatch({ type: "UPDATE_INTEGRATIONS", payload: data.queueIntegration });
+        dispatch({
+          type: "UPDATE_INTEGRATIONS",
+          payload: data.queueIntegration,
+        });
       }
 
       if (data.action === "delete") {
         dispatch({ type: "DELETE_INTEGRATION", payload: +data.integrationId });
       }
-    });
-
-    return () => {
-      socket.disconnect();
     };
-  }, [socketManager]);
+
+    socket.on(`company-${companyId}-queueIntegration`, onQueueEvent);
+    return () => {
+      socket.off(`company-${companyId}-queueIntegration`, onQueueEvent);
+    };
+  }, []);
 
   const handleOpenUserModal = () => {
     setSelectedIntegration(null);
@@ -229,7 +238,8 @@ const QueueIntegration = () => {
       <ConfirmationModal
         title={
           deletingUser &&
-          `${i18n.t("queueIntegration.confirmationModal.deleteTitle")} ${deletingUser.name
+          `${i18n.t("queueIntegration.confirmationModal.deleteTitle")} ${
+            deletingUser.name
           }?`
         }
         open={confirmModalOpen}
@@ -244,86 +254,108 @@ const QueueIntegration = () => {
         aria-labelledby="form-dialog-title"
         integrationId={selectedIntegration && selectedIntegration.id}
       />
-      <MainHeader>
-        <Title>{i18n.t("queueIntegration.title")} ({queueIntegration.length})</Title>
-        <MainHeaderButtonsWrapper>
-          <TextField
-            placeholder={i18n.t("queueIntegration.searchPlaceholder")}
-            type="search"
-            value={searchParam}
-            onChange={handleSearch}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon color="secondary" />
-                </InputAdornment>
-              ),
-            }}
-          />
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={handleOpenUserModal}
+      {user.profile === "user" ? (
+        <ForbiddenPage />
+      ) : (
+        <>
+          <MainHeader>
+            <Title>
+              {i18n.t("queueIntegration.title")} ({queueIntegration.length})
+            </Title>
+            <MainHeaderButtonsWrapper>
+              <TextField
+                placeholder={i18n.t("queueIntegration.searchPlaceholder")}
+                type="search"
+                value={searchParam}
+                onChange={handleSearch}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon color="secondary" />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={handleOpenUserModal}
+              >
+                {i18n.t("queueIntegration.buttons.add")}
+              </Button>
+            </MainHeaderButtonsWrapper>
+          </MainHeader>
+          <Paper
+            className={classes.mainPaper}
+            variant="outlined"
+            onScroll={handleScroll}
           >
-            {i18n.t("queueIntegration.buttons.add")}
-          </Button>
-        </MainHeaderButtonsWrapper>
-      </MainHeader>
-      <Paper
-        className={classes.mainPaper}
-        variant="outlined"
-        onScroll={handleScroll}
-      >
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell padding="checkbox"></TableCell>
-              <TableCell align="center">{i18n.t("queueIntegration.table.id")}</TableCell>
-              <TableCell align="center">{i18n.t("queueIntegration.table.name")}</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            <>
-              {queueIntegration.map((integration) => (
-                <TableRow key={integration.id}>
-                  <TableCell >
-                    {integration.type === "dialogflow" && (<Avatar 
-                      src={dialogflow} className={classes.avatar} />)}
-                    {integration.type === "n8n" && (<Avatar
-                      src={n8n} className={classes.avatar} />)}
-                    {integration.type === "webhook" && (<Avatar
-                      src={webhooks} className={classes.avatar} />)}
-                    {integration.type === "typebot" && (<Avatar
-                      src={typebot} className={classes.avatar} />)}
-                  </TableCell>
-
-                  <TableCell align="center">{integration.id}</TableCell>
-                  <TableCell align="center">{integration.name}</TableCell>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell padding="checkbox"></TableCell>
                   <TableCell align="center">
-                    <IconButton
-                      size="small"
-                      onClick={() => handleEditIntegration(integration)}
-                    >
-                      <Edit color="secondary" />
-                    </IconButton>
-
-                    <IconButton
-                      size="small"
-                      onClick={(e) => {
-                        setConfirmModalOpen(true);
-                        setDeletingUser(integration);
-                      }}
-                    >
-                      <DeleteOutline color="secondary" />
-                    </IconButton>
+                    {i18n.t("queueIntegration.table.id")}
+                  </TableCell>
+                  <TableCell align="center">
+                    {i18n.t("queueIntegration.table.name")}
                   </TableCell>
                 </TableRow>
-              ))}
-              {loading && <TableRowSkeleton columns={7} />}
-            </>
-          </TableBody>
-        </Table>
-      </Paper>
+              </TableHead>
+              <TableBody>
+                <>
+                  {queueIntegration.map((integration) => (
+                    <TableRow key={integration.id}>
+                      <TableCell>
+                        {integration.type === "dialogflow" && (
+                          <Avatar src={dialogflow} className={classes.avatar} />
+                        )}
+                        {integration.type === "n8n" && (
+                          <Avatar src={n8n} className={classes.avatar} />
+                        )}
+                        {integration.type === "webhook" && (
+                          <Avatar src={webhooks} className={classes.avatar} />
+                        )}
+                        {integration.type === "typebot" && (
+                          <Avatar src={typebot} className={classes.avatar} />
+                        )}
+                        {integration.type === "flowbuilder" && (
+                          <Avatar
+                            src={flowbuilder}
+                            className={classes.avatar}
+                          />
+                        )}
+                      </TableCell>
+
+                      <TableCell align="center">{integration.id}</TableCell>
+                      <TableCell align="center">{integration.name}</TableCell>
+                      <TableCell align="center">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleEditIntegration(integration)}
+                        >
+                          <Edit color="secondary" />
+                        </IconButton>
+
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            setConfirmModalOpen(true);
+                            setDeletingUser(integration);
+                          }}
+                        >
+                          <DeleteOutline color="secondary" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {loading && <TableRowSkeleton columns={7} />}
+                </>
+              </TableBody>
+            </Table>
+          </Paper>
+        </>
+      )}
     </MainContainer>
   );
 };

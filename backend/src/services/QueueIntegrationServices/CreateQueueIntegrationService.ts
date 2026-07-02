@@ -35,7 +35,7 @@ const CreateQueueIntegrationService = async ({
   typebotUnknownMessage,
   typebotDelayMessage,
   typebotKeywordRestart,
-  typebotRestartMessage
+  typebotRestartMessage 
 }: Request): Promise<QueueIntegrations> => {
   const schema = Yup.object().shape({
     name: Yup.string()
@@ -60,13 +60,15 @@ const CreateQueueIntegrationService = async ({
     throw new AppError(err.message);
   }
 
+  // Se for typebot, garante que jsonContent seja vazio para evitar conflito com SGP
+  const finalJsonContent = type === "typebot" ? "{}" : jsonContent;
 
   const queueIntegration = await QueueIntegrations.create(
     {
       type,
       name,
       projectName,
-      jsonContent,
+      jsonContent: finalJsonContent,
       language,
       urlN8N,
       companyId,
@@ -76,7 +78,7 @@ const CreateQueueIntegrationService = async ({
       typebotUnknownMessage,
       typebotDelayMessage,
       typebotKeywordRestart,
-      typebotRestartMessage
+      typebotRestartMessage 
     }
   );
 

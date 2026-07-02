@@ -4,10 +4,9 @@ import Grid from "@material-ui/core/Grid";
 import Paper from "@material-ui/core/Paper";
 import { makeStyles } from "@material-ui/core/styles";
 
-import TicketsManager from "../../components/TicketsManager/";
-import Ticket from "../../components/Ticket/";
-
-import logo from "../../assets/logo.png";
+import TicketsManagerTabs from "../../components/TicketsManagerTabs";
+import Ticket from "../../components/Ticket";
+import { QueueSelectedProvider } from "../../context/QueuesSelected/QueuesSelectedContext";
 
 import { i18n } from "../../translate/i18n";
 
@@ -15,9 +14,14 @@ const useStyles = makeStyles(theme => ({
 	chatContainer: {
 		flex: 1,
 		// backgroundColor: "#eee",
-		padding: theme.spacing(4),
+		// padding: theme.spacing(4),
+		padding: theme.padding,
 		height: `calc(100% - 48px)`,
 		overflowY: "hidden",
+		// Ajuste para monitores pequenos (11-13 polegadas)
+		'@media (max-width: 1366px)': {
+			padding: theme.spacing(1),
+		},
 	},
 
 	chatPapper: {
@@ -38,12 +42,16 @@ const useStyles = makeStyles(theme => ({
 		flexDirection: "column",
 	},
 	welcomeMsg: {
-		backgroundColor: theme.palette.boxticket, 
+		// backgroundColor: "#eee",
+		background: theme.palette.tabHeaderBackground,
 		display: "flex",
 		justifyContent: "space-evenly",
 		alignItems: "center",
 		height: "100%",
 		textAlign: "center",
+	},
+	logo: {
+		logo: theme.logo,
 	},
 }));
 
@@ -52,11 +60,12 @@ const Chat = () => {
 	const { ticketId } = useParams();
 
 	return (
+		<QueueSelectedProvider>
 		<div className={classes.chatContainer}>
 			<div className={classes.chatPapper}>
 				<Grid container spacing={0}>
 					<Grid item xs={4} className={classes.contactsWrapper}>
-						<TicketsManager />
+						<TicketsManagerTabs />
 					</Grid>
 					<Grid item xs={8} className={classes.messagessWrapper}>
 						{ticketId ? (
@@ -65,18 +74,19 @@ const Chat = () => {
 							</>
 						) : (
 							<Paper square variant="outlined" className={classes.welcomeMsg}>
-							
-							<div>
-							<center><img style={{ margin: "0 auto", width: "70%" }} src={logo} alt="logologin" /></center>
-							</div>
-							
-							{/*<span>{i18n.t("chat.noTicketMessage")}</span>*/}
+								<span>
+									<center>
+										<img className={classes.logo} width="50%" alt="" />
+									</center>
+									{i18n.t("chat.noTicketMessage")}
+								</span>
 							</Paper>
 						)}
 					</Grid>
 				</Grid>
 			</div>
 		</div>
+		</QueueSelectedProvider>
 	);
 };
 

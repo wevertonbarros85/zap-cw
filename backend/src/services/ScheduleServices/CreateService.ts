@@ -9,6 +9,19 @@ interface Request {
   contactId: number | string;
   companyId: number | string;
   userId?: number | string;
+  ticketUserId?: number | string;
+  queueId?: number | string;
+  openTicket?: string;
+  statusTicket?: string;
+  whatsappId?: number | string;
+  intervalo?: number;
+  valorIntervalo?: number;
+  enviarQuantasVezes?: number;
+  tipoDias?: number;
+  contadorEnvio?: number;
+  assinar?: boolean;
+  // ✅ Campos de lembrete
+  reminderDate?: string;
 }
 
 const CreateService = async ({
@@ -16,7 +29,20 @@ const CreateService = async ({
   sendAt,
   contactId,
   companyId,
-  userId
+  userId,
+  ticketUserId,
+  queueId,
+  openTicket,
+  statusTicket,
+  whatsappId,
+  intervalo,
+  valorIntervalo,
+  enviarQuantasVezes,
+  tipoDias,
+  assinar,
+  contadorEnvio,
+  // ✅ Campos de lembrete
+  reminderDate
 }: Request): Promise<Schedule> => {
   const schema = Yup.object().shape({
     body: Yup.string().required().min(5),
@@ -36,7 +62,23 @@ const CreateService = async ({
       contactId,
       companyId,
       userId,
-      status: 'PENDENTE'
+      // ✅ Se tem lembrete, não marcar como PENDENTE para não ser processado no horário original
+      status: reminderDate ? 'AGUARDANDO_LEMBRETE' : 'PENDENTE',
+      ticketUserId,
+      queueId,
+      openTicket,
+      statusTicket,
+      whatsappId,
+      intervalo,
+      valorIntervalo,
+      enviarQuantasVezes,
+      tipoDias,
+      assinar,
+      contadorEnvio,
+      // ✅ Incluir campos de lembrete
+      reminderDate: reminderDate || null,
+      reminderMessage: null, // Não usar mais o campo reminderMessage
+      reminderStatus: reminderDate ? 'PENDENTE' : null
     }
   );
 

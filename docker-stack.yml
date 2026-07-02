@@ -1,9 +1,9 @@
 version: "3.8"
 
 # ============================================================
-# Atendechat — Docker Swarm Stack com Traefik
-# Rede Traefik: cw-automacoes
-# Cert resolver: letsencryptresolver
+# Atendechat v4.10.8 — Docker Swarm Stack com Traefik
+# Frontend : https://zap.cwautomacoes.space
+# Backend  : https://api.zap.cwautomacoes.space
 # ============================================================
 
 services:
@@ -34,7 +34,7 @@ services:
         condition: any
 
   backend:
-    image: atendechat-backend:latest
+    image: atendechat-backend-v2:latest
     command: sh -c "npx sequelize db:migrate && node dist/server.js"
     environment:
       NODE_ENV: production
@@ -42,20 +42,38 @@ services:
       FRONTEND_URL: https://zap.cwautomacoes.space
       PROXY_PORT: "443"
       PORT: "8080"
+
       DB_DIALECT: postgres
       DB_HOST: postgres
       DB_PORT: "5432"
       DB_USER: atendechat
       DB_PASS: ${DB_PASS}
       DB_NAME: atendechat
+      DB_POOL_MAX: "100"
+      DB_POOL_MIN: "15"
+      DB_POOL_ACQUIRE: "30000"
+      DB_POOL_IDLE: "600000"
+
       JWT_SECRET: ${JWT_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+
       REDIS_URI: redis://:${REDIS_PASS}@redis:6379
       REDIS_OPT_LIMITER_MAX: "1"
       REDIS_OPT_LIMITER_DURATION: "3000"
+
+      SOCKET_ADMIN: "true"
       USER_LIMIT: "10000"
       CONNECTIONS_LIMIT: "100000"
       CLOSED_SEND_BY_ME: "true"
+      VERIFY_TOKEN: "whaticket"
+
+      # API Oficial WhatsApp (Meta)
+      USE_WHATSAPP_OFICIAL: "true"
+      URL_API_OFICIAL: https://novocodigo.atendechat.com
+      TOKEN_API_OFICIAL: ${TOKEN_API_OFICIAL}
+
+      FACEBOOK_APP_ID: ""
+      FACEBOOK_APP_SECRET: ""
     volumes:
       - atendechat_uploads:/app/public
       - atendechat_sessions:/app/.wwebjs_auth
@@ -74,7 +92,7 @@ services:
         - "traefik.docker.network=cw-automacoes"
 
   frontend:
-    image: atendechat-frontend:latest
+    image: atendechat-frontend-v2:latest
     networks:
       - cw-automacoes
     deploy:

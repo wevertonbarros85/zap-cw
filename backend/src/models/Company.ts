@@ -9,7 +9,8 @@ import {
   ForeignKey,
   BelongsTo,
   DataType,
-  HasMany
+  HasMany,
+  Default
 } from "sequelize-typescript";
 import Contact from "./Contact";
 import Message from "./Message";
@@ -22,6 +23,9 @@ import TicketTraking from "./TicketTraking";
 import User from "./User";
 import UserRating from "./UserRating";
 import Whatsapp from "./Whatsapp";
+import CompaniesSettings from "./CompaniesSettings";
+import Invoices from "./Invoices";
+import BirthdaySettings from "./BirthdaySettings";
 
 @Table
 class Company extends Model<Company> {
@@ -39,6 +43,15 @@ class Company extends Model<Company> {
   @Column
   email: string;
 
+  @Column({ defaultValue: "" })
+  document: string;
+
+  @Column({ defaultValue: "" })
+  paymentMethod: string;
+
+  @Column
+  lastLogin: Date;
+
   @Column
   status: boolean;
 
@@ -47,9 +60,6 @@ class Company extends Model<Company> {
 
   @Column
   recurrence: string;
-
-  @Column
-  language: string;
 
   @Column({
     type: DataType.JSONB
@@ -68,6 +78,19 @@ class Company extends Model<Company> {
 
   @UpdatedAt
   updatedAt: Date;
+
+  @Column
+  folderSize: string;
+
+  @Default(true)
+  @Column
+  generateInvoice: boolean;
+
+  @Column
+  numberFileFolder: string;
+
+  @Column
+  updatedAtFolder: string;
 
   @HasMany(() => User, {
     onUpdate: "CASCADE",
@@ -118,6 +141,13 @@ class Company extends Model<Company> {
   })
   settings: Setting[];
 
+  @HasMany(() => CompaniesSettings, {
+    onUpdate: "CASCADE",
+    onDelete: "CASCADE",
+    hooks: true
+  })
+  companieSettings: CompaniesSettings;
+
   @HasMany(() => Ticket, {
     onUpdate: "CASCADE",
     onDelete: "CASCADE",
@@ -131,6 +161,21 @@ class Company extends Model<Company> {
     hooks: true
   })
   ticketTrankins: TicketTraking[];
+
+  @HasMany(() => Invoices, {
+    onUpdate: "CASCADE",
+    onDelete: "CASCADE",
+    hooks: true
+  })
+  invoices: Invoices[];
+
+  @HasMany(() => BirthdaySettings, {
+    onUpdate: "CASCADE",
+    onDelete: "CASCADE",
+    hooks: true
+  })
+  birthdaySettings: BirthdaySettings[];
+
 }
 
 export default Company;

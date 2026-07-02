@@ -1,24 +1,27 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useRef, useCallback } from "react";
 import { useParams, useHistory } from "react-router-dom";
 
-import { toast } from "react-toastify";
 import clsx from "clsx";
 
-import { Paper, makeStyles } from "@material-ui/core";
+import { makeStyles, Paper, useMediaQuery } from "@material-ui/core";
+import { useTheme } from "@material-ui/core/styles";
 
 import ContactDrawer from "../ContactDrawer";
-import MessageInput from "../MessageInputCustom/";
+import MessageInput from "../MessageInput/";
 import TicketHeader from "../TicketHeader";
 import TicketInfo from "../TicketInfo";
 import TicketActionButtons from "../TicketActionButtonsCustom";
 import MessagesList from "../MessagesList";
 import api from "../../services/api";
 import { ReplyMessageProvider } from "../../context/ReplyingMessage/ReplyingMessageContext";
+import { ForwardMessageProvider } from "../../context/ForwarMessage/ForwardMessageContext";
+
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { TagsContainer } from "../TagsContainer";
-import { SocketContext } from "../../context/Socket/SocketContext";
-import { i18n } from "../../translate/i18n";
+import { isNil } from 'lodash';
+import { EditMessageProvider } from "../../context/EditingMessage/EditingMessageContext";
+import { TicketsContext } from "../../context/Tickets/TicketsContext";
 
 const drawerWidth = 320;
 
@@ -44,6 +47,9 @@ const useStyles = makeStyles((theme) => ({
       easing: theme.transitions.easing.sharp,
       duration: theme.transitions.duration.leavingScreen,
     }),
+    [theme.breakpoints.down('md')]: {
+      marginRight: 0,
+    },
   },
 
   mainWrapperShift: {
@@ -54,102 +60,135 @@ const useStyles = makeStyles((theme) => ({
       duration: theme.transitions.duration.enteringScreen,
     }),
     marginRight: 0,
+    [theme.breakpoints.down('md')]: {
+      marginRight: 0,
+    },
   },
 }));
 
 const Ticket = () => {
   const { ticketId } = useParams();
   const history = useHistory();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const classes = useStyles();
 
-  const { user } = useContext(AuthContext);
+  const { user, socket } = useContext(AuthContext);
+  const { setTabOpen } = useContext(TicketsContext);
+
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [contact, setContact] = useState({});
   const [ticket, setTicket] = useState({});
-
-  const socketManager = useContext(SocketContext);
+  const [dragDropFiles, setDragDropFiles] = useState([]);
+  const { companyId } = user;
 
   useEffect(() => {
     setLoading(true);
     const delayDebounceFn = setTimeout(() => {
       const fetchTicket = async () => {
         try {
-          const { data } = await api.get("/tickets/u/" + ticketId);
-          const { queueId } = data;
-          const { queues, profile } = user;
 
-          const queueAllowed = queues.find((q) => q.id === queueId);
-          if (queueAllowed === undefined && profile !== "admin") {
-            toast.error(i18n.t("tickets.toasts.unauthorized"));
-            history.push("/tickets");
-            return;
+          if (!isNil(ticketId) && ticketId !== "undefined") {
+
+            const { data } = await api.get("/tickets/u/" + ticketId);
+
+            setContact(data.contact);
+            // setWhatsapp(data.whatsapp);
+            // setQueueId(data.queueId);
+            setTicket(data);
+            if (["pending", "open", "group"].includes(data.status)) {
+              setTabOpen(data.status);
+            }
+            setLoading(false);
           }
-
-          setContact(data.contact);
-          setTicket(data);
-          setLoading(false);
         } catch (err) {
+          history.push("/tickets");   // correção para evitar tela branca uuid não encontrado Feito por Altemir 16/08/2023
           setLoading(false);
           toastError(err);
         }
       };
       fetchTicket();
     }, 500);
+
     return () => clearTimeout(delayDebounceFn);
   }, [ticketId, user, history]);
 
   useEffect(() => {
-    const companyId = localStorage.getItem("companyId");
-    const socket = socketManager.getSocket(companyId);
+    if (!ticket && !ticket.id && ticket.uuid !== ticketId && ticketId === "undefined") {
+      return;
+    }
 
-    socket.on("ready", () => socket.emit("joinChatBox", `${ticket.id}`));
+    if (user.companyId) {
+      //    const socket = socketManager.GetSocket();
 
-    socket.on(`company-${companyId}-ticket`, (data) => {
-      if (data.action === "update" && data.ticket.id === ticket.id) {
-        setTicket(data.ticket);
+      const onConnectTicket = () => {
+        socket.emit("joinChatBox", `${ticket.id}`);
       }
 
-      if (data.action === "delete" && data.ticketId === ticket.id) {
-        // toast.success("Ticket deleted sucessfully.");
-        history.push("/tickets");
-      }
-    });
+      const onCompanyTicket = (data) => {
+        if (data.action === "update" && data.ticket.id === ticket?.id) {
+          setTicket(data.ticket);
+        }
 
-    socket.on(`company-${companyId}-contact`, (data) => {
-      if (data.action === "update") {
-        setContact((prevState) => {
-          if (prevState.id === data.contact?.id) {
-            return { ...prevState, ...data.contact };
-          }
-          return prevState;
-        });
-      }
-    });
+        if (data.action === "delete" && data.ticketId === ticket?.id) {
+          history.push("/tickets");
+        }
+      };
 
-    return () => {
-      socket.disconnect();
-    };
-  }, [ticketId, ticket, history, socketManager]);
+      const onCompanyContactTicket = (data) => {
+        if (data.action === "update") {
+          // if (isMounted) {
+          setContact((prevState) => {
+            if (prevState.id === data.contact?.id) {
+              return { ...prevState, ...data.contact };
+            }
+            return prevState;
+          });
+          // }
+        }
+      };
 
-  const handleDrawerOpen = () => {
+      socket.on("connect", onConnectTicket)
+      socket.on(`company-${companyId}-ticket`, onCompanyTicket);
+      socket.on(`company-${companyId}-contact`, onCompanyContactTicket);
+
+      return () => {
+
+        socket.emit("joinChatBoxLeave", `${ticket.id}`);
+        socket.off("connect", onConnectTicket);
+        socket.off(`company-${companyId}-ticket`, onCompanyTicket);
+        socket.off(`company-${companyId}-contact`, onCompanyContactTicket);
+      };
+    }
+  }, [ticketId, ticket, history]);
+
+  const handleDrawerOpen = useCallback(() => {
     setDrawerOpen(true);
-  };
+  }, []);
 
-  const handleDrawerClose = () => {
+  const handleDrawerClose = useCallback(() => {
     setDrawerOpen(false);
-  };
+  }, []);
 
-  const renderTicketInfo = () => {
-    if (ticket.user !== undefined) {
-      return (
-        <TicketInfo
-          contact={contact}
-          ticket={ticket}
-          onClick={handleDrawerOpen}
-        />
-      );
+  const handleQuickMessageSelect = (quickMessage) => {
+    try {
+      if (quickMessage.message) {
+        // Disparar evento que o MessageInput vai escutar
+        const event = new CustomEvent('insertQuickMessage', {
+          detail: { message: quickMessage.message }
+        });
+        window.dispatchEvent(event);
+        
+      }
+      
+      if (quickMessage.mediaPath) {
+        // Tratar mídia se necessário
+      }
+    } catch (error) {
+      console.error("Erro ao inserir resposta rápida:", error);
+      toastError("Erro ao inserir resposta rápida");
     }
   };
 
@@ -157,14 +196,26 @@ const Ticket = () => {
     return (
       <>
         <MessagesList
-          ticket={ticket}
-          ticketId={ticket.id}
           isGroup={ticket.isGroup}
-        ></MessagesList>
-        <MessageInput ticketId={ticket.id} ticketStatus={ticket.status} />
+          onDrop={setDragDropFiles}
+          whatsappId={ticket.whatsappId}
+          queueId={ticket.queueId}
+          channel={ticket.channel}
+          ticketStatus={ticket.status}
+        >
+        </MessagesList>
+        <MessageInput
+          ticketId={ticket.id}
+          ticketStatus={ticket.status}
+          ticketChannel={ticket.channel}
+          droppedFiles={dragDropFiles}
+          contactId={contact.id}
+          whatsappId={ticket.whatsappId}
+        />
       </>
     );
   };
+
 
   return (
     <div className={classes.root} id="drawer-container">
@@ -172,18 +223,39 @@ const Ticket = () => {
         variant="outlined"
         elevation={0}
         className={clsx(classes.mainWrapper, {
-          [classes.mainWrapperShift]: drawerOpen,
+          [classes.mainWrapperShift]: drawerOpen && !isMobile,
         })}
       >
+        {/* <div id="TicketHeader"> */}
         <TicketHeader loading={loading}>
-          {renderTicketInfo()}
-          <TicketActionButtons ticket={ticket} />
+          {ticket.contact !== undefined && (
+            <div id="TicketHeader">
+              <TicketInfo
+                contact={contact}
+                ticket={ticket}
+                onClick={handleDrawerOpen}
+              />
+            </div>
+          )}
+        <TicketActionButtons
+          ticket={ticket}
+          contact={contact}
+          onQuickMessageSelect={handleQuickMessageSelect}
+        />
         </TicketHeader>
+        {/* </div> */}
         <Paper>
-          <TagsContainer ticket={ticket} />
+          <TagsContainer contact={contact} />
         </Paper>
-        <ReplyMessageProvider>{renderMessagesList()}</ReplyMessageProvider>
+        <ReplyMessageProvider>
+          <ForwardMessageProvider>
+            <EditMessageProvider>
+              {renderMessagesList()}
+            </EditMessageProvider>
+          </ForwardMessageProvider>
+        </ReplyMessageProvider>
       </Paper>
+
       <ContactDrawer
         open={drawerOpen}
         handleDrawerClose={handleDrawerClose}
@@ -191,6 +263,7 @@ const Ticket = () => {
         loading={loading}
         ticket={ticket}
       />
+
     </div>
   );
 };

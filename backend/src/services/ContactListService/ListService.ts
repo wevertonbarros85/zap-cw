@@ -2,7 +2,7 @@ import { Op, fn, col, where } from "sequelize";
 import ContactList from "../../models/ContactList";
 import ContactListItem from "../../models/ContactListItem";
 import { isEmpty } from "lodash";
-
+import removeAccents from "remove-accents"
 interface Request {
   companyId: number | string;
   searchParam?: string;
@@ -25,14 +25,16 @@ const ListService = async ({
   };
 
   if (!isEmpty(searchParam)) {
+    const sanitizedSearchParam = removeAccents(searchParam.toLocaleLowerCase().trim());
+
     whereCondition = {
       ...whereCondition,
       [Op.or]: [
         {
           name: where(
-            fn("LOWER", col("ContactList.name")),
+            fn("LOWER", fn('unaccent',col("ContactList.name"))),
             "LIKE",
-            `%${searchParam.toLowerCase().trim()}%`
+            `%${sanitizedSearchParam}%`
           )
         }
       ]

@@ -10,11 +10,13 @@ const CreateService = async (
   companyId: number
 ): Promise<CampaignSetting[]> => {
   const settings = [];
+
   for (let settingKey of Object.keys(data.settings)) {
     const value =
       isArray(data.settings[settingKey]) || isObject(data.settings[settingKey])
         ? JSON.stringify(data.settings[settingKey])
         : data.settings[settingKey];
+
     const [record, created] = await CampaignSetting.findOrCreate({
       where: {
         key: settingKey,

@@ -2,7 +2,7 @@ import Tag from "../../models/Tag";
 import AppError from "../../errors/AppError";
 
 const TagService = async (id: string | number): Promise<Tag> => {
-  const tag = await Tag.findByPk(id);
+  const tag = await Tag.findByPk(id, { include: [ "contacts"] });
 
   if (!tag) {
     throw new AppError("ERR_NO_TAG_FOUND", 404);

@@ -1,13 +1,10 @@
 import { useState, useEffect, useReducer, useContext } from "react";
-import toastError from "../../errors/toastError";
-
 import api from "../../services/api";
-import { SocketContext } from "../../context/Socket/SocketContext";
+import { AuthContext } from "../../context/Auth/AuthContext";
 
 const reducer = (state, action) => {
   if (action.type === "LOAD_WHATSAPPS") {
     const whatsApps = action.payload;
-
     return [...whatsApps];
   }
 
@@ -40,7 +37,6 @@ const reducer = (state, action) => {
 
   if (action.type === "DELETE_WHATSAPPS") {
     const whatsAppId = action.payload;
-
     const whatsAppIndex = state.findIndex((s) => s.id === whatsAppId);
     if (whatsAppIndex !== -1) {
       state.splice(whatsAppIndex, 1);
@@ -56,9 +52,9 @@ const reducer = (state, action) => {
 const useWhatsApps = () => {
   const [whatsApps, dispatch] = useReducer(reducer, []);
   const [loading, setLoading] = useState(true);
+  const { user, socket } = useContext(AuthContext);
 
-  const socketManager = useContext(SocketContext);
-
+  // Effect para carregar os dados iniciais
   useEffect(() => {
     setLoading(true);
     const fetchSession = async () => {
@@ -67,39 +63,69 @@ const useWhatsApps = () => {
         dispatch({ type: "LOAD_WHATSAPPS", payload: data });
         setLoading(false);
       } catch (err) {
+        console.error("Erro ao carregar WhatsApps:", err);
         setLoading(false);
-        toastError(err);
       }
     };
     fetchSession();
   }, []);
 
+  // Effect para configurar os listeners do socket
   useEffect(() => {
-    const companyId = localStorage.getItem("companyId");
-    const socket = socketManager.getSocket(companyId);
-
-    socket.on(`company-${companyId}-whatsapp`, (data) => {
-      if (data.action === "update") {
-        dispatch({ type: "UPDATE_WHATSAPPS", payload: data.whatsapp });
-      }
+    // Debug para entender o que está chegando
+    console.log('useWhatsApps - Debug:', {
+      userId: user?.id,
+      companyId: user?.companyId,
+      socket: socket,
+      socketType: typeof socket,
+      hasOnMethod: socket && typeof socket.on === 'function',
+      hasOffMethod: socket && typeof socket.off === 'function'
     });
 
-    socket.on(`company-${companyId}-whatsapp`, (data) => {
-      if (data.action === "delete") {
-        dispatch({ type: "DELETE_WHATSAPPS", payload: data.whatsappId });
-      }
-    });
+    if (user?.companyId && socket && typeof socket.on === 'function' && typeof socket.off === 'function') {
+      const companyId = user.companyId;
+      
+      const onCompanyWhatsapp = (data) => {
+        console.log('Recebido evento whatsapp:', data);
+        if (data.action === "update") {
+          dispatch({ type: "UPDATE_WHATSAPPS", payload: data.whatsapp });
+        }
+        if (data.action === "delete") {
+          dispatch({ type: "DELETE_WHATSAPPS", payload: data.whatsappId });
+        }
+      };
 
-    socket.on(`company-${companyId}-whatsappSession`, (data) => {
-      if (data.action === "update") {
-        dispatch({ type: "UPDATE_SESSION", payload: data.session });
-      }
-    });
+      const onCompanyWhatsappSession = (data) => {
+        console.log('Recebido evento whatsapp session:', data);
+        if (data.action === "update") {
+          dispatch({ type: "UPDATE_SESSION", payload: data.session });
+        }
+      };
 
-    return () => {
-      socket.disconnect();
-    };
-  }, [socketManager]);
+      const whatsappEvent = `company-${companyId}-whatsapp`;
+      const sessionEvent = `company-${companyId}-whatsappSession`;
+
+      console.log('Registrando listeners WhatsApp:', { whatsappEvent, sessionEvent });
+
+      socket.on(whatsappEvent, onCompanyWhatsapp);
+      socket.on(sessionEvent, onCompanyWhatsappSession);
+
+      return () => {
+        if (socket && typeof socket.off === 'function') {
+          console.log('Removendo listeners WhatsApp:', { whatsappEvent, sessionEvent });
+          socket.off(whatsappEvent, onCompanyWhatsapp);
+          socket.off(sessionEvent, onCompanyWhatsappSession);
+        }
+      };
+    } else {
+      console.log('Condições não atendidas para listeners WhatsApp:', {
+        hasCompanyId: !!user?.companyId,
+        hasSocket: !!socket,
+        hasOnMethod: socket && typeof socket.on === 'function',
+        hasOffMethod: socket && typeof socket.off === 'function'
+      });
+    }
+  }, [socket, user?.companyId]); // Dependências corretas
 
   return { whatsApps, loading };
 };

@@ -51,9 +51,9 @@ const useStyles = makeStyles((theme) => ({
 
 const ContactListSchema = Yup.object().shape({
   name: Yup.string()
-    .min(2, i18n.t("contactLists.dialog.nameShort"))
-    .max(50, i18n.t("contactLists.dialog.nameLong"))
-    .required(i18n.t("contactLists.dialog.nameRequired")),
+    .min(2, "Too Short!")
+    .max(50, "Too Long!")
+    .required("Required"),
 });
 
 const ContactListModal = ({ open, onClose, contactListId }) => {
@@ -94,7 +94,7 @@ const ContactListModal = ({ open, onClose, contactListId }) => {
       } else {
         await api.post("/contact-lists", contactListData);
       }
-      toast.success(i18n.t("contactList.toasts.success"));
+      toast.success(i18n.t("contactList.dialog"));
     } catch (err) {
       toastError(err);
     }

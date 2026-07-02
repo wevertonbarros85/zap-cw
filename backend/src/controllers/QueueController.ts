@@ -26,24 +26,47 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
 };
 
 export const store = async (req: Request, res: Response): Promise<Response> => {
-  const { name, color, greetingMessage, outOfHoursMessage, schedules, orderQueue, integrationId, promptId } =
-    req.body;
+  const {
+    name,
+    color,
+    greetingMessage,
+    outOfHoursMessage,
+    schedules,
+    chatbots,
+    orderQueue,
+    tempoRoteador,
+    ativarRoteador,
+    integrationId,
+    fileListId,
+    closeTicket,
+    typeRandomMode,
+    randomizeImmediate,
+    tipoIntegracao
+  } = req.body;
   const { companyId } = req.user;
-  console.log("queue", integrationId, promptId)
+
   const queue = await CreateQueueService({
     name,
     color,
     greetingMessage,
     companyId,
     outOfHoursMessage,
+    tempoRoteador: tempoRoteador ===""? 0 : tempoRoteador,
+    ativarRoteador,
     schedules,
+    chatbots,
     orderQueue: orderQueue === "" ? null : orderQueue,
     integrationId: integrationId === "" ? null : integrationId,
-    promptId: promptId === "" ? null : promptId
+    fileListId: fileListId === "" ? null : fileListId,
+    closeTicket,
+    typeRandomMode,
+    randomizeImmediate,
+    tipoIntegracao
   });
 
   const io = getIO();
-  io.to(`company-${companyId}-mainchannel`).emit(`company-${companyId}-queue`, {
+  io.of(String(companyId))
+  .emit(`company-${companyId}-queue`, {
     action: "update",
     queue
   });
@@ -66,21 +89,47 @@ export const update = async (
 ): Promise<Response> => {
   const { queueId } = req.params;
   const { companyId } = req.user;
-  const { name, color, greetingMessage, outOfHoursMessage, schedules, orderQueue, integrationId, promptId } =
-    req.body;
-  const queue = await UpdateQueueService(queueId, {
+
+  const {
     name,
     color,
     greetingMessage,
     outOfHoursMessage,
     schedules,
+    chatbots,
+    orderQueue,
+    tempoRoteador,
+    ativarRoteador,
+    integrationId,
+    fileListId,
+    closeTicket,
+    typeRandomMode,
+    randomizeImmediate,
+    tipoIntegracao
+  } = req.body;
+
+  const queue = await UpdateQueueService(queueId,
+    {name,
+    color,
+    greetingMessage,
+    outOfHoursMessage,
+    tempoRoteador: tempoRoteador ===""? 0 : tempoRoteador,
+    ativarRoteador,
+    schedules,
+    chatbots,
     orderQueue: orderQueue === "" ? null : orderQueue,
     integrationId: integrationId === "" ? null : integrationId,
-    promptId: promptId === "" ? null : promptId
-  }, companyId);
+    fileListId: fileListId === "" ? null : fileListId,
+    closeTicket,
+    typeRandomMode,
+    randomizeImmediate,
+    tipoIntegracao
+  },
+    companyId);
 
   const io = getIO();
-  io.to(`company-${companyId}-mainchannel`).emit(`company-${companyId}-queue`, {
+  io.of(String(companyId))
+  .emit(`company-${companyId}-queue`, {
     action: "update",
     queue
   });
@@ -98,7 +147,8 @@ export const remove = async (
   await DeleteQueueService(queueId, companyId);
 
   const io = getIO();
-  io.to(`company-${companyId}-mainchannel`).emit(`company-${companyId}-queue`, {
+  io.of(String(companyId))
+  .emit(`company-${companyId}-queue`, {
     action: "delete",
     queueId: +queueId
   });

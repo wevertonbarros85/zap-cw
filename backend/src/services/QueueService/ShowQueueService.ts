@@ -1,15 +1,33 @@
 import AppError from "../../errors/AppError";
+import Chatbot from "../../models/Chatbot";
 import Queue from "../../models/Queue";
+import User from "../../models/User";
 
 const ShowQueueService = async (
   queueId: number | string,
   companyId: number
 ): Promise<Queue> => {
-  const queue = await Queue.findByPk(queueId);
-
-  if (queue?.companyId !== companyId) {
-    throw new AppError("Não é possível consultar registros de outra empresa");
-  }
+  const queue = await Queue.findOne({
+    where: {
+      id: queueId,
+      companyId
+    },
+    include: [{
+      model: Chatbot,
+      as: "chatbots",
+      include: [
+        {
+          model: User,
+          as: "user"
+        },
+      ]
+    }
+  ],
+    order: [
+      [{ model: Chatbot, as: "chatbots" }, "id", "asc"],
+      ["id", "ASC"]
+    ]
+  });
 
   if (!queue) {
     throw new AppError("ERR_QUEUE_NOT_FOUND");

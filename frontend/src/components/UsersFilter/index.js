@@ -77,7 +77,7 @@ export function UsersFilter({ onFiltered, initialUsers }) {
           <TextField
             {...params}
             variant="outlined"
-            placeholder={i18n.t("tickets.filters.user")}
+            placeholder={i18n.t("tickets.search.filterUsers")}
           />
         )}
       />

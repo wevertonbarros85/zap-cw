@@ -34,7 +34,7 @@ const GetDefaultWhatsApp = async (
   }
 
   if (!connection) {
-    throw new AppError(`Nenhum número de Whatsapp foi configurado para essa empresa`);
+    throw new AppError(`ERR_NO_DEF_WAPP_FOUND in COMPANY ${companyId}`);
   }
 
   return connection;

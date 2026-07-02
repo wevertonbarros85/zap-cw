@@ -5,7 +5,7 @@ import { isArray, isString } from "lodash";
 import toastError from "../../errors/toastError";
 import api from "../../services/api";
 
-export function TagsContainer({ ticket }) {
+export function TagsContainer({ contact }) {
 
     const [tags, setTags] = useState([]);
     const [selecteds, setSelecteds] = useState([]);
@@ -20,14 +20,14 @@ export function TagsContainer({ ticket }) {
     useEffect(() => {
         if (isMounted.current) {
             loadTags().then(() => {
-                if (Array.isArray(ticket.tags)) {
-                    setSelecteds(ticket.tags);
+                if (Array.isArray(contact.tags)) {
+                    setSelecteds(contact.tags);
                 } else {
                     setSelecteds([]);
                 }
             });
         }
-    }, [ticket]);
+    }, [contact]);
 
     const createTag = async (data) => {
         try {
@@ -40,7 +40,9 @@ export function TagsContainer({ ticket }) {
 
     const loadTags = async () => {
         try {
-            const { data } = await api.get(`/tags/list`);
+            const { data } = await api.get(`/tags/list`, 
+            {params: { kanban: 0}
+        });
             setTags(data);
         } catch (err) {
             toastError(err);
@@ -61,8 +63,12 @@ export function TagsContainer({ ticket }) {
         if (reason === 'create-option') {
             if (isArray(value)) {
                 for (let item of value) {
+                    if (item.length < 3) {
+                        toastError("Tag muito curta!");
+                        return;
+                    }
                     if (isString(item)) {
-                        const newTag = await createTag({ name: item })
+                        const newTag = await createTag({ name: item, kanban: 0, color: getRandomHexColor() })
                         optionsChanged.push(newTag);
                     } else {
                         optionsChanged.push(item);
@@ -74,11 +80,23 @@ export function TagsContainer({ ticket }) {
             optionsChanged = value;
         }
         setSelecteds(optionsChanged);
-        await syncTags({ ticketId: ticket.id, tags: optionsChanged });
+        await syncTags({ contactId: contact.id, tags: optionsChanged });
+    }
+
+    function getRandomHexColor() {
+        // Gerar valores aleatórios para os componentes de cor
+        const red = Math.floor(Math.random() * 256); // Valor entre 0 e 255
+        const green = Math.floor(Math.random() * 256); // Valor entre 0 e 255
+        const blue = Math.floor(Math.random() * 256); // Valor entre 0 e 255
+      
+        // Converter os componentes de cor em uma cor hexadecimal
+        const hexColor = `#${red.toString(16).padStart(2, '0')}${green.toString(16).padStart(2, '0')}${blue.toString(16).padStart(2, '0')}`;
+      
+        return hexColor;
     }
 
     return (
-        <Paper style={{ padding: 12 }}>
+        <Paper style={{ padding: 2 }}>
             <Autocomplete
                 multiple
                 size="small"
@@ -92,15 +110,18 @@ export function TagsContainer({ ticket }) {
                         <Chip
                             variant="outlined"
                             style={{
-                                background: option.color || '#eee',
+                                backgroundColor: option.color || '#eee',
                                 color: "#FFF",
                                 marginRight: 1,
-                                fontWeight: 600,
+                                padding: 1,
+                                fontWeight: 'bold',
+                                paddingLeft: 5,
+                                paddingRight: 5,
                                 borderRadius: 3,
                                 fontSize: "0.8em",
                                 whiteSpace: "nowrap"
                             }}
-                            label={option.name.toUpperCase()}
+                            label={option.name}
                             {...getTagProps({ index })}
                             size="small"
                         />
@@ -110,7 +131,9 @@ export function TagsContainer({ ticket }) {
                     <TextField {...params} variant="outlined" placeholder="Tags" />
                 )}
                 PaperComponent={({ children }) => (
-                    <Paper style={{ width: 400, marginLeft: 12 }}>
+                    <Paper
+                        style={{ width: 400, marginLeft: 6 }}
+                    >
                         {children}
                     </Paper>
                 )}

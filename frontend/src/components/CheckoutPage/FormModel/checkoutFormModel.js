@@ -1,75 +1,69 @@
-import { i18n } from "../../../translate/i18n";
-
 export default {
   formId: 'checkoutForm',
   formField: {
     firstName: {
       name: 'firstName',
-      label: i18n.t('checkoutPage.form.firstName.label'),
-      requiredErrorMsg: i18n.t('checkoutPage.form.firstName.required')
+      label: 'Nome completo*',
+      requiredErrorMsg: 'O nome completo é obrigatório'
     },
     lastName: {
       name: 'lastName',
-      label: i18n.t('checkoutPage.form.lastName.label'),
-      requiredErrorMsg: i18n.t('checkoutPage.form.lastName.required')
+      label: 'Last name*',
+      requiredErrorMsg: 'Last name is required'
     },
     address1: {
       name: 'address2',
-      label: i18n.t('checkoutPage.form.address1.label'),
-      requiredErrorMsg: i18n.t('checkoutPage.form.address1.required')
+      label: 'Endereço*',
+      requiredErrorMsg: 'O Endereço é obrigatório'
     },
 
     city: {
       name: 'city',
-      label: i18n.t('checkoutPage.form.city.label'),
-      requiredErrorMsg: i18n.t('checkoutPage.form.city.required')
+      label: 'Cidade*',
+      requiredErrorMsg: 'Cidade é obrigatória'
     },
     state: {
       name: 'state',
-      label: i18n.t('checkoutPage.form.state.label'),
-      requiredErrorMsg: i18n.t('checkoutPage.form.state.required')
+      label: 'Estado*',
+      requiredErrorMsg: 'Cidade é obrigatória'
     },
     zipcode: {
       name: 'zipcode',
-      label: i18n.t('checkoutPage.form.zipcode.label'),
-      requiredErrorMsg: i18n.t('checkoutPage.form.zipcode.required'),
-      invalidErrorMsg: i18n.t('checkoutPage.form.zipcode.invalid')
+      label: 'CPF/CNPJ*',
+      requiredErrorMsg: 'CEP é obrigatório',
+      invalidErrorMsg: 'Formato de CEP inválido'
     },
     country: {
       name: 'country',
-      label: i18n.t('checkoutPage.form.country.label'),
-      requiredErrorMsg: i18n.t('checkoutPage.form.country.required')
+      label: 'País*',
+      requiredErrorMsg: 'País é obrigatório'
     },
     useAddressForPaymentDetails: {
       name: 'useAddressForPaymentDetails',
-      label: i18n.t('checkoutPage.form.useAddressForPaymentDetails.label')
-    },
-    invoiceId: {
-      name: 'invoiceId',
-      label: i18n.t('checkoutPage.form.invoiceId.label'),
+      label: 'Use this address for payment details'
     },
     nameOnCard: {
       name: 'nameOnCard',
-      label: i18n.t('checkoutPage.form.nameOnCard.label'),
-      requiredErrorMsg: i18n.t('checkoutPage.form.nameOnCard.required')
+      label: 'Name on card*',
+      requiredErrorMsg: 'Name on card is required'
     },
     cardNumber: {
       name: 'cardNumber',
-      label: i18n.t('checkoutPage.form.cardNumber.label'),
-      requiredErrorMsg: i18n.t('checkoutPage.form.cardNumber.required'),
-      invalidErrorMsg: i18n.t('checkoutPage.form.cardNumber.invalid')
+      label: 'Card number*',
+      requiredErrorMsg: 'Card number is required',
+      invalidErrorMsg: 'Card number is not valid (e.g. 4111111111111)'
     },
     expiryDate: {
       name: 'expiryDate',
-      label: i18n.t('checkoutPage.form.expiryDate.label'),
-      requiredErrorMsg: i18n.t('checkoutPage.form.expiryDate.required'),
-      invalidErrorMsg: i18n.t('checkoutPage.form.expiryDate.invalid')
+      label: 'Expiry date*',
+      requiredErrorMsg: 'Expiry date is required',
+      invalidErrorMsg: 'Expiry date is not valid'
     },
     cvv: {
       name: 'cvv',
-      label: i18n.t('checkoutPage.form.cvv.label'),
-      requiredErrorMsg: i18n.t('checkoutPage.form.cvv.required'),
-      invalidErrorMsg: i18n.t('checkoutPage.form.cvv.invalid')
+      label: 'CVV*',
+      requiredErrorMsg: 'CVV is required',
+      invalidErrorMsg: 'CVV is invalid (e.g. 357)'
     }
   }
 };

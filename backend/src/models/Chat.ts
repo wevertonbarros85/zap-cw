@@ -45,6 +45,21 @@ class Chat extends Model<Chat> {
   @Column
   companyId: number;
 
+  @Column
+  isGroup: boolean;
+
+  @Column
+  groupName: string;
+
+  @Column
+  groupAdminId: number;
+
+  @Column({ defaultValue: "" })
+  description: string;
+
+  @Column({ defaultValue: "" })
+  groupImage: string;
+
   @CreatedAt
   createdAt: Date;
 
@@ -56,6 +71,9 @@ class Chat extends Model<Chat> {
 
   @BelongsTo(() => User)
   owner: User;
+
+  @BelongsTo(() => User, { foreignKey: "groupAdminId" })
+  groupAdmin: User;
 
   @HasMany(() => ChatUser)
   users: ChatUser[];

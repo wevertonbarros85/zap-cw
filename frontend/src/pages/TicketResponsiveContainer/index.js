@@ -1,14 +1,13 @@
 import React from "react";
 import withWidth, { isWidthUp } from '@material-ui/core/withWidth';
 
-import Tickets from "../TicketsCustom"
-import TicketAdvanced from "../TicketsAdvanced";
+import Tickets from "../Tickets"
 
 function TicketResponsiveContainer (props) {
-    if (isWidthUp('md', props.width)) {
+     if (isWidthUp('md', props.width)) {
         return <Tickets />;    
     }
-    return <TicketAdvanced />
+    return <Tickets />
 }
 
 export default withWidth()(TicketResponsiveContainer);

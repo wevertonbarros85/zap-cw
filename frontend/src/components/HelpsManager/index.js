@@ -101,7 +101,7 @@ export function HelpManagerForm (props) {
                         <Grid xs={12} sm={6} md={3} item>
                             <Field
                                 as={TextField}
-                                label="Código do Vídeo"
+                                label={i18n.t("helps.settings.codeVideo")}
                                 name="video"
                                 variant="outlined"
                                 className={classes.fullWidth}
@@ -111,7 +111,7 @@ export function HelpManagerForm (props) {
                         <Grid xs={12} sm={12} md={6} item>
                             <Field
                                 as={TextField}
-                                label="Descrição"
+                                label={i18n.t("helps.settings.description")}
                                 name="description"
                                 variant="outlined"
                                 className={classes.fullWidth}
@@ -120,19 +120,19 @@ export function HelpManagerForm (props) {
                         </Grid>
                         <Grid sm={3} md={1} item>
                             <ButtonWithSpinner className={classes.fullWidth} loading={loading} onClick={() => onCancel()} variant="contained">
-                                {i18n.t('settings.helps.buttons.clean')}
+                            {i18n.t("helps.settings.clear")}
                             </ButtonWithSpinner>
                         </Grid>
                         { record.id !== undefined ? (
                             <Grid sm={3} md={1} item>
                                 <ButtonWithSpinner className={classes.fullWidth} loading={loading} onClick={() => onDelete(record)} variant="contained" color="secondary">
-                                    {i18n.t('settings.helps.buttons.delete')}
+                                {i18n.t("helps.settings.delete")}
                                 </ButtonWithSpinner>
                             </Grid>
                         ) : null}
                         <Grid sm={3} md={1} item>
                             <ButtonWithSpinner className={classes.fullWidth} loading={loading} type="submit" variant="contained" color="primary">
-                                {i18n.t('settings.helps.buttons.save')}
+                            {i18n.t("helps.settings.save")}
                             </ButtonWithSpinner>
                         </Grid>
                     </Grid>
@@ -152,9 +152,9 @@ export function HelpsManagerGrid (props) {
                 <TableHead>
                 <TableRow>
                     <TableCell align="center" style={{width: '1%'}}>#</TableCell>
-                    <TableCell align="left">{i18n.t("settings.helps.grid.title")}</TableCell>
-                    <TableCell align="left">{i18n.t("settings.helps.grid.description")}</TableCell>
-                    <TableCell align="left">{i18n.t("settings.helps.grid.video")}</TableCell>
+                    <TableCell align="left">Título</TableCell>
+                    <TableCell align="left">{i18n.t("helps.settings.description")}</TableCell>
+                    <TableCell align="left">Video</TableCell>
                 </TableRow>
                 </TableHead>
                 <TableBody>
@@ -203,7 +203,7 @@ export default function HelpsManager () {
             const helpList = await list()
             setRecords(helpList)
         } catch (e) {
-            toast.error(i18n.t('settings.helps.toasts.errorList'))
+            toast.error('Não foi possível carregar a lista de registros')
         }
         setLoading(false)
     }
@@ -218,9 +218,9 @@ export default function HelpsManager () {
             }
             await loadHelps()
             handleCancel()
-            toast.success(i18n.t('settings.helps.toasts.success'))
+            toast.success('Operação realizada com sucesso!')
         } catch (e) {
-            toast.error(i18n.t('settings.helps.toasts.error'))
+            toast.error('Não foi possível realizar a operação. Verifique se já existe uma helpo com o mesmo nome ou se os campos foram preenchidos corretamente')
         }
         setLoading(false)
     }
@@ -231,9 +231,9 @@ export default function HelpsManager () {
             await remove(record.id)
             await loadHelps()
             handleCancel()
-            toast.success(i18n.t('settings.helps.toasts.success'))
+            toast.success('Operação realizada com sucesso!')
         } catch (e) {
-            toast.error(i18n.t('settings.helps.toasts.errorOperation'))
+            toast.error('Não foi possível realizar a operação')
         }
         setLoading(false)
     }
@@ -279,12 +279,12 @@ export default function HelpsManager () {
                 </Grid>
             </Grid>
             <ConfirmationModal
-                title={i18n.t('settings.helps.confirmModal.title')}
+                title="Exclusão de Registro"
                 open={showConfirmDialog}
                 onClose={() => setShowConfirmDialog(false)}
                 onConfirm={() => handleDelete()}
             >
-                {i18n.t('settings.helps.confirmModal.confirm')}
+                Deseja realmente excluir esse registro?
             </ConfirmationModal>
         </Paper>
     )

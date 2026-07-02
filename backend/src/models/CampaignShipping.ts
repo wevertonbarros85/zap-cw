@@ -28,6 +28,12 @@ class CampaignShipping extends Model<CampaignShipping> {
   @Column
   message: string;
 
+  @Column
+  confirmationMessage: string;
+
+  @Column
+  confirmation: boolean;
+
   @ForeignKey(() => ContactListItem)
   @Column
   contactId: number;
@@ -35,6 +41,12 @@ class CampaignShipping extends Model<CampaignShipping> {
   @ForeignKey(() => Campaign)
   @Column
   campaignId: number;
+
+  @Column
+  confirmationRequestedAt: Date;
+
+  @Column
+  confirmedAt: Date;
 
   @Column
   deliveredAt: Date;

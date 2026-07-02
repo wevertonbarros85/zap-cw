@@ -1,3 +1,4 @@
+// src/services/UserServices/UpdateUserService.ts - ATUALIZADO COM NOVA COLUNA
 import * as Yup from "yup";
 
 import AppError from "../../errors/AppError";
@@ -12,8 +13,28 @@ interface UserData {
   profile?: string;
   companyId?: number;
   queueIds?: number[];
+  startWork?: string;
+  endWork?: string;
+  farewellMessage?: string;
   whatsappId?: number;
   allTicket?: string;
+  defaultTheme?: string;
+  defaultMenu?: string;
+  allowGroup?: boolean;
+  allHistoric?: string;
+  allUserChat?: string;
+  userClosePendingTicket?: string;
+  showDashboard?: string;
+  defaultTicketsManagerWidth?: number;
+  allowRealTime?: string;
+  allowConnections?: string;
+  showContacts?: string;
+  showCampaign?: string;
+  showFlow?: string;
+  profileImage?: string;
+  finalizacaoComValorVendaAtiva?: boolean;
+  birthDate?: Date | string;
+  allowSeeMessagesInPendingTickets?: string; // 🆕 NOVO CAMPO ADICIONADO
 }
 
 interface Request {
@@ -36,7 +57,7 @@ const UpdateUserService = async ({
   companyId,
   requestUserId
 }: Request): Promise<Response | undefined> => {
-  const user = await ShowUserService(userId);
+  const user = await ShowUserService(userId, companyId);
 
   const requestUser = await User.findByPk(requestUserId);
 
@@ -46,18 +67,71 @@ const UpdateUserService = async ({
 
   const schema = Yup.object().shape({
     name: Yup.string().min(2),
+    allHistoric: Yup.string(),
     email: Yup.string().email(),
     profile: Yup.string(),
     password: Yup.string(),
-	allTicket: Yup.string()
+    birthDate: Yup.date().nullable().max(new Date(), "Data de nascimento não pode ser no futuro"),
   });
 
-  const { email, password, profile, name, queueIds = [], whatsappId, allTicket } = userData;
+  const oldUserEmail = user.email;
+
+  const {
+    email,
+    password,
+    profile,
+    name,
+    queueIds = [],
+    startWork,
+    endWork,
+    farewellMessage,
+    whatsappId,
+    allTicket,
+    defaultTheme,
+    defaultMenu,
+    allowGroup,
+    allHistoric,
+    allUserChat,
+    userClosePendingTicket,
+    showDashboard,
+    allowConnections,
+    defaultTicketsManagerWidth = 550,
+    allowRealTime,
+    showContacts,
+    showCampaign,
+    showFlow,
+    profileImage,
+    finalizacaoComValorVendaAtiva,
+    birthDate,
+    allowSeeMessagesInPendingTickets
+  } = userData;
 
   try {
-    await schema.validate({ email, password, profile, name, allTicket });
+    await schema.validate({ 
+      email, 
+      password, 
+      profile, 
+      name, 
+      birthDate
+    });
   } catch (err: any) {
     throw new AppError(err.message);
+  }
+
+  // Processar data de nascimento
+  let processedBirthDate: Date | null = user.birthDate;
+  if (birthDate !== undefined) {
+    if (birthDate === null || birthDate === '') {
+      processedBirthDate = null;
+    } else if (typeof birthDate === 'string') {
+      const dateOnly = birthDate.split('T')[0];
+      processedBirthDate = new Date(dateOnly + 'T12:00:00');
+    } else if (birthDate instanceof Date) {
+      const year = birthDate.getFullYear();
+      const month = birthDate.getMonth();
+      const day = birthDate.getDate();
+      processedBirthDate = new Date(year, month, day, 12, 0, 0);
+    }
   }
 
   await user.update({
@@ -65,8 +139,28 @@ const UpdateUserService = async ({
     password,
     profile,
     name,
+    startWork,
+    endWork,
+    farewellMessage,
     whatsappId: whatsappId || null,
-	allTicket
+    allTicket,
+    defaultTheme,
+    defaultMenu,
+    allowGroup,
+    allHistoric,
+    allUserChat,
+    userClosePendingTicket,
+    showDashboard,
+    defaultTicketsManagerWidth,
+    allowRealTime,
+    profileImage,
+    allowConnections,
+    showContacts,
+    showCampaign,
+    showFlow,
+    finalizacaoComValorVendaAtiva,
+    birthDate: processedBirthDate,
+    allowSeeMessagesInPendingTickets
   });
 
   await user.$set("queues", queueIds);
@@ -75,6 +169,13 @@ const UpdateUserService = async ({
 
   const company = await Company.findByPk(user.companyId);
 
+  if (company.email === oldUserEmail) {
+    await company.update({
+      email,
+      password
+    });
+  }
+
   const serializedUser = {
     id: user.id,
     name: user.name,
@@ -82,7 +183,27 @@ const UpdateUserService = async ({
     profile: user.profile,
     companyId: user.companyId,
     company,
-    queues: user.queues
+    queues: user.queues,
+    startWork: user.startWork,
+    endWork: user.endWork,
+    greetingMessage: user.farewellMessage,
+    allTicket: user.allTicket,
+    defaultMenu: user.defaultMenu,
+    defaultTheme: user.defaultTheme,
+    allowGroup: user.allowGroup,
+    allHistoric: user.allHistoric,
+    userClosePendingTicket: user.userClosePendingTicket,
+    showDashboard: user.showDashboard,
+    defaultTicketsManagerWidth: user.defaultTicketsManagerWidth,
+    allowRealTime: user.allowRealTime,
+    allowConnections: user.allowConnections,
+    showContacts: user.showContacts,
+    showCampaign: user.showCampaign,
+    profileImage: user.profileImage,
+    showFlow: user.showFlow,
+    finalizacaoComValorVendaAtiva: user.finalizacaoComValorVendaAtiva,
+    birthDate: user.birthDate,
+    allowSeeMessagesInPendingTickets: user.allowSeeMessagesInPendingTickets
   };
 
   return serializedUser;

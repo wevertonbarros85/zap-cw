@@ -13,6 +13,8 @@ import DeleteService from "../services/AnnouncementService/DeleteService";
 import FindService from "../services/AnnouncementService/FindService";
 
 import Announcement from "../models/Announcement";
+import AnnouncementAck from "../models/AnnouncementAck";
+import logger from "../utils/logger";
 
 import AppError from "../errors/AppError";
 
@@ -66,11 +68,14 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     companyId
   });
 
+  logger.info({ msg: "announcement:create", id: record.id, companyId });
+
   const io = getIO();
-  io.emit(`company-announcement`, {
-    action: "create",
-    record
-  });
+  io.of(String(companyId))
+    .emit(`company-announcement`, {
+      action: "create",
+      record
+    });
 
   return res.status(200).json(record);
 };
@@ -88,7 +93,7 @@ export const update = async (
   res: Response
 ): Promise<Response> => {
   const data = req.body as StoreData;
-
+  const { companyId } = req.user;
   const schema = Yup.object().shape({
     title: Yup.string().required()
   });
@@ -106,11 +111,14 @@ export const update = async (
     id
   });
 
+  logger.info({ msg: "announcement:update", id, companyId });
+
   const io = getIO();
-  io.emit(`company-announcement`, {
-    action: "update",
-    record
-  });
+  io.of(String(companyId))
+    .emit(`company-announcement`, {
+      action: "update",
+      record
+    });
 
   return res.status(200).json(record);
 };
@@ -124,11 +132,14 @@ export const remove = async (
 
   await DeleteService(id);
 
+  logger.info({ msg: "announcement:delete", id, companyId });
+
   const io = getIO();
-  io.to(`company-${companyId}-mainchannel`).emit(`company-${companyId}-announcement`, {
-    action: "delete",
-    id
-  });
+  io.of(String(companyId))
+    .emit(`company-announcement`, {
+      action: "delete",
+      id
+    });
 
   return res.status(200).json({ message: "Announcement deleted" });
 };
@@ -143,11 +154,87 @@ export const findList = async (
   return res.status(200).json(records);
 };
 
+export const getAnnouncementsForCompany = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { searchParam, pageNumber } = req.query as IndexQuery;
+  const { companyId } = req.user;
+
+  const { records, count, hasMore } = await ListService({
+    searchParam,
+    pageNumber,
+    userCompanyId: companyId // Novo parâmetro
+  });
+
+  logger.info({ msg: "announcement:list:company", companyId, count });
+
+  return res.json({ records, count, hasMore });
+};
+
+export const acknowledge = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { id } = req.params;
+  const { companyId } = req.user;
+
+  const announcement = await Announcement.findByPk(id);
+  if (!announcement) {
+    throw new AppError("ERR_NO_ANNOUNCEMENT_FOUND", 404);
+  }
+  if (announcement.targetCompanyId && Number(announcement.targetCompanyId) !== Number(companyId)) {
+    throw new AppError("ERR_FORBIDDEN_ACK_TARGET_COMPANY", 403);
+  }
+
+  await AnnouncementAck.findOrCreate({
+    where: { announcementId: Number(id), companyId },
+    defaults: { announcementId: Number(id), companyId }
+  });
+
+  logger.info({ msg: "announcement:ack", id: Number(id), companyId });
+
+  const io = getIO();
+  io.of(String(companyId))
+    .emit(`company-announcement`, {
+      action: "ack",
+      id: Number(id)
+    });
+
+  return res.status(200).json({ message: "Announcement acknowledged" });
+};
+
+export const unacknowledge = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { id } = req.params;
+  const { companyId } = req.user;
+
+  await AnnouncementAck.destroy({ where: { announcementId: Number(id), companyId } });
+  const announcement = await Announcement.findByPk(id);
+  if (announcement?.targetCompanyId && Number(announcement.targetCompanyId) !== Number(companyId)) {
+    throw new AppError("ERR_FORBIDDEN_ACK_TARGET_COMPANY", 403);
+  }
+
+  logger.info({ msg: "announcement:unack", id: Number(id), companyId });
+
+  const io = getIO();
+  io.of(String(companyId))
+    .emit(`company-announcement`, {
+      action: "unack",
+      id: Number(id)
+    });
+
+  return res.status(200).json({ message: "Announcement unacknowledged" });
+};
+
 export const mediaUpload = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
   const { id } = req.params;
+  const { companyId } = req.user;
   const files = req.files as Express.Multer.File[];
   const file = head(files);
 
@@ -155,16 +242,17 @@ export const mediaUpload = async (
     const announcement = await Announcement.findByPk(id);
 
     await announcement.update({
-      mediaPath: file.filename,
-      mediaName: file.originalname
+      mediaPath: file.filename.replace('/', '-'),
+      mediaName: file.originalname.replace('/', '-')
     });
     await announcement.reload();
 
     const io = getIO();
-    io.emit(`company-announcement`, {
-      action: "update",
-      record: announcement
-    });
+    io.of(String(companyId))
+      .emit(`company-announcement`, {
+        action: "update",
+        record: announcement
+      });
 
     return res.send({ mensagem: "Mensagem enviada" });
   } catch (err: any) {
@@ -177,11 +265,14 @@ export const deleteMedia = async (
   res: Response
 ): Promise<Response> => {
   const { id } = req.params;
-
+  const { companyId } = req.user;
   try {
     const announcement = await Announcement.findByPk(id);
-    const filePath = path.resolve("public", announcement.mediaPath);
+
+    const filePath = path.resolve("public", "announcements", announcement.mediaPath);
+
     const fileExists = fs.existsSync(filePath);
+
     if (fileExists) {
       fs.unlinkSync(filePath);
     }
@@ -193,10 +284,11 @@ export const deleteMedia = async (
     await announcement.reload();
 
     const io = getIO();
-    io.emit(`company-announcement`, {
-      action: "update",
-      record: announcement
-    });
+    io.of(String(companyId))
+      .emit(`company-announcement`, {
+        action: "update",
+        record: announcement
+      });
 
     return res.send({ mensagem: "Arquivo excluído" });
   } catch (err: any) {

@@ -5,7 +5,7 @@ const ShowInvoceService = async (Invoiceid: string | number): Promise<Invoice> =
   const invoice = await Invoice.findByPk(Invoiceid);
 
   if (!invoice) {
-    throw new AppError("ERR_NO_PLAN_FOUND", 404);
+    throw new AppError("ERR_NO_INVOICE_FOUND", 404);
   }
 
   return invoice;

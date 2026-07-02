@@ -12,7 +12,7 @@ const UpdateInvoiceService = async (InvoiceData: InvoiceData): Promise<Invoice> 
   const invoice = await Invoice.findByPk(id);
 
   if (!invoice) {
-    throw new AppError("ERR_NO_PLAN_FOUND", 404);
+    throw new AppError("ERR_NO_INVOICE_FOUND", 404);
   }
 
   await invoice.update({

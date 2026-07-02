@@ -1,6 +1,5 @@
-import React, { useState, useContext, useEffect } from "react";
+import React, { useState, useContext, useEffect, useMemo, useCallback } from "react";
 import clsx from "clsx";
-import moment from "moment";
 import {
   makeStyles,
   Drawer,
@@ -9,42 +8,58 @@ import {
   List,
   Typography,
   Divider,
+  Button,
   MenuItem,
   IconButton,
   Menu,
   useTheme,
   useMediaQuery,
+  Avatar,
+  Badge,
+  withStyles,
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
+  FormControlLabel,
+  Checkbox,
 } from "@material-ui/core";
-
 import MenuIcon from "@material-ui/icons/Menu";
 import ChevronLeftIcon from "@material-ui/icons/ChevronLeft";
-import AccountCircle from "@material-ui/icons/AccountCircle";
+import NotificationsIcon from "@material-ui/icons/Notifications";
 import CachedIcon from "@material-ui/icons/Cached";
-
+import api from "../services/api";
 import MainListItems from "./MainListItems";
 import NotificationsPopOver from "../components/NotificationsPopOver";
 import NotificationsVolume from "../components/NotificationsVolume";
 import UserModal from "../components/UserModal";
 import { AuthContext } from "../context/Auth/AuthContext";
 import BackdropLoading from "../components/BackdropLoading";
-import DarkMode from "../components/DarkMode";
 import { i18n } from "../translate/i18n";
 import toastError from "../errors/toastError";
 import AnnouncementsPopover from "../components/AnnouncementsPopover";
-
+import BirthdayModal from "../components/BirthdayModal";
 import logo from "../assets/logo.png";
-import { SocketContext } from "../context/Socket/SocketContext";
+import logoDark from "../assets/logo-black.png";
 import ChatPopover from "../pages/Chat/ChatPopover";
-
 import { useDate } from "../hooks/useDate";
-
 import ColorModeContext from "../layout/themeContext";
-import Brightness4Icon from '@material-ui/icons/Brightness4';
-import Brightness7Icon from '@material-ui/icons/Brightness7';
-import LanguageControl from "../components/LanguageControl";
-import { LanguageOutlined } from "@material-ui/icons";
+import Brightness4Icon from "@material-ui/icons/Brightness4";
+import Brightness7Icon from "@material-ui/icons/Brightness7";
+import { getBackendUrl } from "../config";
+import useSettings from "../hooks/useSettings";
+import VersionControl from "../components/VersionControl";
+import useSocketListener from "../hooks/useSocketListener";
+import { FaGlobe } from "react-icons/fa";
+import { logInfo, logError } from "../utils/logger";
 
+const backendUrl = getBackendUrl();
 const drawerWidth = 240;
+
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -54,34 +69,59 @@ const useStyles = makeStyles((theme) => ({
       height: "calc(100vh - 56px)",
     },
     backgroundColor: theme.palette.fancyBackground,
-    '& .MuiButton-outlinedPrimary': {
-      color: theme.mode === 'light' ? '#FFF' : '#FFF',
-	  //backgroundColor: theme.mode === 'light' ? '#682ee2' : '#682ee2',
-	backgroundColor: theme.mode === 'light' ? theme.palette.primary.main : '#1c1c1c',
-      //border: theme.mode === 'light' ? '1px solid rgba(0 124 102)' : '1px solid rgba(255, 255, 255, 0.5)',
+    "& .MuiButton-outlinedPrimary": {
+      color: theme.palette.primary.main, // Usa cor do tema
+      border: `1px solid ${theme.palette.primary.main}40`,
+      borderRadius: "8px",
+      fontWeight: 600,
+      textTransform: "none",
+      transition: "all 0.3s ease",
+      "&:hover": {
+        backgroundColor: `${theme.palette.primary.main}10`,
+        borderColor: theme.palette.primary.main,
+        transform: "translateY(-1px)",
+        boxShadow: `0 4px 12px ${theme.palette.primary.main}30`,
+      },
     },
-    '& .MuiTab-textColorPrimary.Mui-selected': {
-      color: theme.mode === 'light' ? 'Primary' : '#FFF',
-    }
+    "& .MuiTab-textColorPrimary.Mui-selected": {
+      color: theme.palette.primary.main, // Usa cor do tema
+      fontWeight: 700,
+    },
   },
+
+  chip: {
+    background: "red",
+    color: "white",
+  },
+
   avatar: {
     width: "100%",
   },
+
   toolbar: {
-    paddingRight: 24, // keep right padding when drawer closed
+    paddingRight: 24,
     color: theme.palette.dark.main,
-    background: theme.palette.barraSuperior,
+    // Usa a cor primária do tema para o fundo do AppBar
+    background: theme.palette.primary.main, // Mudança principal aqui
+    boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)", // Sombra sutil
+    transition: "all 0.3s ease",
   },
+
   toolbarIcon: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "center",
     padding: "0 8px",
     minHeight: "48px",
     [theme.breakpoints.down("sm")]: {
-      height: "48px"
-    }
+      height: "48px",
+    },
+    // ALTERAÇÃO: Removido o gradiente e definido fundo branco
+    backgroundColor: "#ffffff", // Fundo branco fixo
+    borderBottom: `1px solid ${theme.palette.divider}`, // Linha sutil para separação
+    transition: "all 0.3s ease",
   },
+
   appBar: {
     zIndex: theme.zIndex.drawer + 1,
     transition: theme.transitions.create(["width", "margin"], {
@@ -89,6 +129,7 @@ const useStyles = makeStyles((theme) => ({
       duration: theme.transitions.duration.leavingScreen,
     }),
   },
+
   appBarShift: {
     marginLeft: drawerWidth,
     width: `calc(100% - ${drawerWidth}px)`,
@@ -97,20 +138,22 @@ const useStyles = makeStyles((theme) => ({
       duration: theme.transitions.duration.enteringScreen,
     }),
     [theme.breakpoints.down("sm")]: {
-      display: "none"
-    }
+      display: "none",
+    },
   },
-  menuButton: {
-    marginRight: 36,
-  },
+
   menuButtonHidden: {
     display: "none",
   },
+
   title: {
     flexGrow: 1,
     fontSize: 14,
     color: "white",
+    fontWeight: 600,
+    letterSpacing: "0.025em",
   },
+
   drawerPaper: {
     position: "relative",
     whiteSpace: "nowrap",
@@ -119,13 +162,19 @@ const useStyles = makeStyles((theme) => ({
       easing: theme.transitions.easing.sharp,
       duration: theme.transitions.duration.enteringScreen,
     }),
-    [theme.breakpoints.down("sm")]: {
-      width: "100%"
-    },
-    ...theme.scrollbarStylesSoft
+    overflowX: "hidden",
+    overflowY: "hidden",
+    // Melhorias sutis no drawer
+    borderRight: `1px solid ${theme.mode === "light" ? "#e0e0e0" : "#424242"}`,
+    boxShadow:
+      theme.mode === "light"
+        ? "2px 0 8px rgba(0, 0, 0, 0.1)"
+        : "2px 0 8px rgba(0, 0, 0, 0.3)",
   },
+
   drawerPaperClose: {
     overflowX: "hidden",
+    overflowY: "hidden",
     transition: theme.transitions.create("width", {
       easing: theme.transitions.easing.sharp,
       duration: theme.transitions.duration.leavingScreen,
@@ -134,60 +183,237 @@ const useStyles = makeStyles((theme) => ({
     [theme.breakpoints.up("sm")]: {
       width: theme.spacing(9),
     },
-    [theme.breakpoints.down("sm")]: {
-      width: "100%"
-    }
   },
+
   appBarSpacer: {
     minHeight: "48px",
   },
+
   content: {
     flex: 1,
     overflow: "auto",
+    padding: 0,
+    margin: 0,
+  },
 
-  },
   container: {
-    paddingTop: theme.spacing(4),
-    paddingBottom: theme.spacing(4),
+    padding: 0,
+    margin: 0,
+    maxWidth: "none",
+    width: "100%",
   },
-  paper: {
-    padding: theme.spacing(2),
-    display: "flex",
-    overflow: "auto",
-    flexDirection: "column"
-  },
+
   containerWithScroll: {
     flex: 1,
-    padding: theme.spacing(1),
     overflowY: "scroll",
+    overflowX: "hidden",
     ...theme.scrollbarStyles,
+    borderRadius: "8px",
+    border: "2px solid transparent",
+    "&::-webkit-scrollbar": {
+      display: "none",
+    },
+    "-ms-overflow-style": "none",
+    "scrollbar-width": "none",
   },
+
   NotificationsPopOver: {
-    // color: theme.barraSuperior.secondary.main,
+    // Mantém original
   },
+
   logo: {
-    width: "80%",
-    height: "auto",
+    width: "100%",
+    //height: "45px",
     maxWidth: 180,
     [theme.breakpoints.down("sm")]: {
       width: "auto",
-      height: "80%",
+      height: "100%",
       maxWidth: 180,
     },
-    logo: theme.logo
+    logo: theme.logo,
+    content:
+      "url(" +
+      (theme.mode === "light"
+        ? theme.calculatedLogoLight()
+        : theme.calculatedLogoDark()) +
+      ")",
+    transition: "all 0.3s ease", // Transição suave
+    "&:hover": {
+      transform: "scale(1.02)", // Pequeno zoom no hover
+    },
+  },
+
+  hideLogo: {
+    display: "none",
+  },
+
+  avatar2: {
+    width: theme.spacing(4),
+    height: theme.spacing(4),
+    cursor: "pointer",
+    borderRadius: "50%",
+    border: "2px solid #ccc",
+    transition: "all 0.3s ease",
+    "&:hover": {
+      transform: "scale(1.05)",
+      borderColor: theme.palette.primary.main, // Usa cor do tema
+    },
+  },
+
+  updateDiv: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // Botões da toolbar melhorados
+  toolbarButton: {
+    color: "rgba(255, 255, 255, 0.9)",
+    borderRadius: "8px",
+    padding: "8px",
+    margin: "0 2px",
+    transition: "all 0.3s ease",
+    "&:hover": {
+      backgroundColor: "rgba(255, 255, 255, 0.1)",
+      transform: "translateY(-1px)",
+    },
+    "&:active": {
+      transform: "translateY(0)",
+    },
+  },
+
+  // Menu hambúrguer com animação sutil
+  menuButton: {
+    color: "white",
+    "&:hover": {
+      backgroundColor: "rgba(255, 255, 255, 0.1)",
+    },
+    "& .MuiSvgIcon-root": {
+      transition: "transform 0.3s ease",
+    },
+    "&:hover .MuiSvgIcon-root": {
+      transform: "rotate(90deg)",
+    },
+  },
+
+  // Seletor de idioma melhorado
+  languageSelector: {
+    position: "relative",
+    display: "inline-block",
+    "& > button": {
+      background: "rgba(255, 255, 255, 0.1)",
+      border: "none",
+      borderRadius: "8px",
+      color: "rgba(255, 255, 255, 0.9)",
+      fontSize: "18px",
+      padding: "8px 12px",
+      cursor: "pointer",
+      transition: "all 0.3s ease",
+      "&:hover": {
+        background: "rgba(255, 255, 255, 0.2)",
+        transform: "translateY(-1px)",
+      },
+    },
+    "& > div": {
+      position: "absolute",
+      top: "45px",
+      left: "0",
+      background: "#fff",
+      boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+      borderRadius: "8px",
+      padding: "8px",
+      zIndex: 1000,
+      minWidth: "120px",
+      "& button": {
+        background: "none",
+        border: "none",
+        color: "#374151",
+        display: "block",
+        width: "100%",
+        padding: "8px 12px",
+        textAlign: "left",
+        borderRadius: "6px",
+        fontSize: "14px",
+        fontWeight: 500,
+        transition: "all 0.2s ease",
+        "&:hover": {
+          background: `${theme.palette.primary.main}10`, // Usa cor do tema
+          color: theme.palette.primary.main, // Usa cor do tema
+          transform: "none",
+        },
+      },
+    },
+  },
+
+  // Badge animado
+  animatedBadge: {
+    "& .MuiBadge-badge": {
+      animation: "$heartbeat 2s infinite",
+    },
+  },
+
+  "@keyframes heartbeat": {
+    "0%": { transform: "scale(1)" },
+    "14%": { transform: "scale(1.1)" },
+    "28%": { transform: "scale(1)" },
+    "42%": { transform: "scale(1.1)" },
+    "70%": { transform: "scale(1)" },
   },
 }));
 
-const LoggedInLayout = ({ children, themeToggle }) => {
+const StyledBadge = withStyles((theme) => ({
+  badge: {
+    backgroundColor: "#44b700",
+    color: "#44b700",
+    boxShadow: `0 0 0 2px ${theme.palette.background.paper}`,
+    "&::after": {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      width: "100%",
+      height: "100%",
+      borderRadius: "50%",
+      animation: "$ripple 1.2s infinite ease-in-out",
+      border: "1px solid currentColor",
+      content: '""',
+    },
+  },
+  "@keyframes ripple": {
+    "0%": {
+      transform: "scale(.8)",
+      opacity: 1,
+    },
+    "100%": {
+      transform: "scale(2.4)",
+      opacity: 0,
+    },
+  },
+}))(Badge);
+
+const SmallAvatar = withStyles((theme) => ({
+  root: {
+    width: 22,
+    height: 22,
+    border: `2px solid ${theme.palette.background.paper}`,
+  },
+}))(Avatar);
+
+const LoggedInLayout = ({ children, themeToggle, hideMenu = false }) => {
   const classes = useStyles();
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const { handleLogout, loading } = useContext(AuthContext);
+  const { handleLogout, loading, user, socket } = useContext(AuthContext);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerVariant, setDrawerVariant] = useState("permanent");
-  // const [dueDate, setDueDate] = useState("");
-  const { user } = useContext(AuthContext);
+
+  const [showOptions, setShowOptions] = useState(false);
+  const [showAnnouncementsModal, setShowAnnouncementsModal] = useState(false);
+  const [announcements, setAnnouncements] = useState([]);
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
+  const [ackChecked, setAckChecked] = useState(false);
+  const [showBirthdayModal, setShowBirthdayModal] = useState(false);
 
   const theme = useTheme();
   const { colorMode } = useContext(ColorModeContext);
@@ -196,66 +422,94 @@ const LoggedInLayout = ({ children, themeToggle }) => {
   const [volume, setVolume] = useState(localStorage.getItem("volume") || 1);
 
   const { dateToClient } = useDate();
-
-  // Languages
-  const [anchorElLanguage, setAnchorElLanguage] = useState(null);
-  const [menuLanguageOpen, setMenuLanguageOpen] = useState(false);
+  const [profileUrl, setProfileUrl] = useState(null);
+  const [updateInProgress, setUpdateInProgress] = useState(false);
 
 
-  //################### CODIGOS DE TESTE #########################################
-  // useEffect(() => {
-  //   navigator.getBattery().then((battery) => {
-  //     console.log(`Battery Charging: ${battery.charging}`);
-  //     console.log(`Battery Level: ${battery.level * 100}%`);
-  //     console.log(`Charging Time: ${battery.chargingTime}`);
-  //     console.log(`Discharging Time: ${battery.dischargingTime}`);
-  //   })
-  // }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const mainListItems = useMemo(
+    () => <MainListItems drawerOpen={drawerOpen} collapsed={!drawerOpen} />,
+    [user, drawerOpen]
+  );
 
-  // useEffect(() => {
-  //   const geoLocation = navigator.geolocation
+  const settings = useSettings();
 
-  //   geoLocation.getCurrentPosition((position) => {
-  //     let lat = position.coords.latitude;
-  //     let long = position.coords.longitude;
+  const fetchAnnouncements = useCallback(async () => {
+      try {
+        const { data } = await api.get("/announcements/for-company", {
+          params: {
+            status: true,
+            pageNumber: "1"
+          }
+        });
 
-  //     console.log('latitude: ', lat)
-  //     console.log('longitude: ', long)
-  //   })
-  // }, []);
+        // Filtra apenas os informativos ativos e não expirados
+        const activeAnnouncementsRaw = data.records.filter(announcement => {
+          const isActive = announcement.status === true || announcement.status === "true";
+          const isNotExpired = !announcement.expiresAt || new Date(announcement.expiresAt) > new Date();
+          return isActive && isNotExpired;
+        });
 
-  // useEffect(() => {
-  //   const nucleos = window.navigator.hardwareConcurrency;
-
-  //   console.log('Nucleos: ', nucleos)
-  // }, []);
-
-  // useEffect(() => {
-  //   console.log('userAgent', navigator.userAgent)
-  //   if (
-  //     navigator.userAgent.match(/Android/i)
-  //     || navigator.userAgent.match(/webOS/i)
-  //     || navigator.userAgent.match(/iPhone/i)
-  //     || navigator.userAgent.match(/iPad/i)
-  //     || navigator.userAgent.match(/iPod/i)
-  //     || navigator.userAgent.match(/BlackBerry/i)
-  //     || navigator.userAgent.match(/Windows Phone/i)
-  //   ) {
-  //     console.log('é mobile ', true) //celular
-  //   }
-  //   else {
-  //     console.log('não é mobile: ', false) //nao é celular
-  //   }
-  // }, []);
-  //##############################################################################
-
-  const socketManager = useContext(SocketContext);
+        // Backend já filtra por empresa excluindo os reconhecidos
+        const activeAnnouncements = activeAnnouncementsRaw;
+        setAnnouncements(activeAnnouncements);
+        setShowAnnouncementsModal(activeAnnouncements.length > 0);
+      } catch (err) {
+        toastError(err);
+      }
+  }, [user?.id]);
 
   useEffect(() => {
-    if (document.body.offsetWidth > 1200) {
-      setDrawerOpen(true);
+    if (user?.id) {
+      fetchAnnouncements();
     }
-  }, []);
+  }, [user?.id, fetchAnnouncements]);
+
+  // Atualiza checkbox ao trocar de aviso
+  useEffect(() => {
+    if (!selectedAnnouncement) {
+      setAckChecked(false);
+      return;
+    }
+    // Não precisamos mais ler localStorage; tratamos via backend
+    setAckChecked(false);
+  }, [selectedAnnouncement, user?.companyId]);
+
+  const handleToggleAcknowledge = async (announcementId, checked) => {
+    try {
+      if (checked) {
+        await api.post(`/announcements/${announcementId}/ack`);
+        // Remove este aviso da lista
+        setAnnouncements(prev => prev.filter(a => a.id !== announcementId));
+        setSelectedAnnouncement(null);
+      } else {
+        await api.delete(`/announcements/${announcementId}/ack`);
+        // Opcional: recarregar lista para reexibir (se desejar permitir desfazer)
+        await fetchAnnouncements();
+      }
+      // Fecha modal se não restarem avisos
+      setShowAnnouncementsModal((prev) => {
+        return announcements.length - 1 > 0;
+      });
+    } catch (err) {
+      toastError(err);
+    }
+  };
+
+  useEffect(() => {
+    
+
+    if (document.body.offsetWidth > 600) {
+      if (user.defaultMenu === "closed") {
+        setDrawerOpen(false);
+      } else {
+        setDrawerOpen(true);
+      }
+    }
+    if (user.defaultTheme === "dark" && theme.mode === "light") {
+      colorMode.toggleColorMode();
+    }
+  }, [user.defaultMenu, document.body.offsetWidth]);
 
   useEffect(() => {
     if (document.body.offsetWidth < 600) {
@@ -266,51 +520,128 @@ const LoggedInLayout = ({ children, themeToggle }) => {
   }, [drawerOpen]);
 
   useEffect(() => {
-    const companyId = localStorage.getItem("companyId");
-    const userId = localStorage.getItem("userId");
+    const companyId = user?.companyId;
 
-    const socket = socketManager.getSocket(companyId);
+    if (companyId) {
+      const buildProfileUrl = () => {
+        const savedProfileImage = localStorage.getItem("profileImage");
+        const currentProfileImage = savedProfileImage || user.profileImage;
 
-    socket.on(`company-${companyId}-auth`, (data) => {
-      if (data.user.id === +userId) {
-        toastError("Sua conta foi acessada em outro computador.");
-        setTimeout(() => {
-          localStorage.clear();
-          window.location.reload();
-        }, 1000);
+        if (currentProfileImage) {
+          return `${backendUrl}/public/company${companyId}/user/${currentProfileImage}`;
+        }
+        return `${backendUrl}/public/app/noimage.png`;
+      };
+
+      setProfileUrl(buildProfileUrl());
+    }
+  }, [user?.companyId, user?.profileImage, backendUrl]);
+
+  // Callbacks dos eventos
+  const handleAuthEvent = useCallback((data) => {
+    if (data.user.id === +user?.id) {
+      toastError("Sua conta foi acessada em outro computador.");
+      setTimeout(() => {
+        localStorage.clear();
+        window.location.reload();
+      }, 1000);
+    }
+  }, [user?.id]);
+
+  const handleUserUpdate = useCallback((data) => {
+    if (data.action === "update" && data.user.id === +user?.id) {
+      if (data.user.profileImage) {
+        const newProfileUrl = `${backendUrl}/public/company${user?.companyId}/user/${data.user.profileImage}`;
+        setProfileUrl(newProfileUrl);
+        localStorage.setItem("profileImage", data.user.profileImage);
       }
-    });
+    }
+  }, [user?.companyId, user?.id, backendUrl]);
 
-    socket.emit("userStatus");
-    const interval = setInterval(() => {
+  // Callbacks para eventos de aniversário
+  const handleUserBirthday = useCallback((data) => {
+    logInfo("Evento de aniversário de usuário recebido", { data });
+    if (data.userId === +user?.id) {
+      setShowBirthdayModal(true);
+    }
+  }, [user?.id]);
+
+  const handleContactBirthday = useCallback((data) => {
+    logInfo("Evento de aniversário de contato recebido", { data });
+  }, []);
+
+  // Verificar aniversários no login
+  const checkBirthdaysOnLogin = useCallback(async () => {
+    if (user?.id && user?.companyId) {
+      try {
+        const { data } = await api.get("/birthdays/today");
+        const birthdayData = data.data;
+
+        // Verificar se o usuário atual faz aniversário hoje
+        const userBirthday = birthdayData.users.find(u => u.id === +user.id);
+        if (userBirthday) {
+          logInfo("Usuário faz aniversário hoje; exibindo modal");
+          setShowBirthdayModal(true);
+        }
+
+        // Se há aniversariantes, mostrar notificação
+        if (birthdayData.users.length > 0 || birthdayData.contacts.length > 0) {
+          logInfo("Há aniversariantes hoje", { birthdayData });
+        }
+      } catch (error) {
+        logError("Erro ao verificar aniversários", error);
+      }
+    }
+  }, [user?.id, user?.companyId]);
+
+  // Registrar listeners
+  useSocketListener(socket, user, 'auth', handleAuthEvent);
+  useSocketListener(socket, user, 'user', handleUserUpdate);
+  useSocketListener(socket, user, 'user-birthday', handleUserBirthday);
+  useSocketListener(socket, user, 'contact-birthday', handleContactBirthday);
+
+  // Verificar aniversários quando o usuário faz login
+  useEffect(() => {
+    if (user?.id && user?.companyId) {
+      // Pequeno delay para garantir que o socket esteja conectado
+      const timer = setTimeout(() => {
+        checkBirthdaysOnLogin();
+      }, 1000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [user?.id, user?.companyId, checkBirthdaysOnLogin]);
+
+  // Status do usuário
+  useEffect(() => {
+    if (socket?.emit && user?.companyId) {
       socket.emit("userStatus");
-    }, 1000 * 60 * 5);
 
-    return () => {
-      socket.disconnect();
-      clearInterval(interval);
-    };
-  }, [socketManager]);
+      const interval = setInterval(() => {
+        socket?.emit && socket.emit("userStatus");
+      }, 1000 * 60 * 5);
+
+      return () => clearInterval(interval);
+    }
+  }, [socket, user?.companyId]);
+
+  const handleUpdateStart = () => {
+    setUpdateInProgress(true);
+  };
+
+  const handleUpdateComplete = () => {
+    setUpdateInProgress(false);
+  };
 
   const handleMenu = (event) => {
     setAnchorEl(event.currentTarget);
     setMenuOpen(true);
   };
 
-  const handlemenuLanguage = ( event ) => {
-    setAnchorElLanguage(event.currentTarget);
-    setMenuLanguageOpen( true );
-  }
-
   const handleCloseMenu = () => {
     setAnchorEl(null);
     setMenuOpen(false);
   };
-
-  const handleCloseMenuLanguage = (  ) => {
-    setAnchorElLanguage(null);
-    setMenuLanguageOpen(false);
-  }
 
   const handleOpenUserModal = () => {
     setUserModalOpen(true);
@@ -323,14 +654,14 @@ const LoggedInLayout = ({ children, themeToggle }) => {
   };
 
   const drawerClose = () => {
-    if (document.body.offsetWidth < 600) {
+    if (document.body.offsetWidth < 600 || user.defaultMenu === "closed") {
       setDrawerOpen(false);
     }
   };
 
   const handleRefreshPage = () => {
     window.location.reload(false);
-  }
+  };
 
   const handleMenuItemClick = () => {
     const { innerWidth: width } = window;
@@ -339,62 +670,111 @@ const LoggedInLayout = ({ children, themeToggle }) => {
     }
   };
 
-  const toggleColorMode = () => {
-    colorMode.toggleColorMode();
-  }
+  const handleLanguageChange = (lng) => {
+    i18n.changeLanguage(lng);
+    localStorage.setItem("language", lng);
+    window.location.reload();
+  };
 
-  if (loading) {
+  const LANGUAGE_OPTIONS = [
+    { code: "pt-BR", label: "Português" },
+    { code: "en", label: "English" },
+    { code: "es", label: "Spanish" },
+    { code: "ar", label: "عربي" },
+  ];
+
+  const [enabledLanguages, setEnabledLanguages] = useState(["pt-BR", "en"]);
+  const { getAll } = useSettings();
+  useEffect(() => {
+    async function fetchSettings() {
+      try {
+        const settings = await getAll();
+        const enabledLanguagesSetting = settings.find(
+          (s) => s.key === "enabledLanguages"
+        )?.value;
+        let langs = ["pt-BR", "en"];
+        try {
+          if (enabledLanguagesSetting) {
+            langs = JSON.parse(enabledLanguagesSetting);
+          }
+        } catch { }
+        console.log(
+          "Layout - enabledLanguages carregadas:",
+          langs,
+          "para companyId:",
+          user?.companyId
+        );
+        setEnabledLanguages(langs);
+      } catch (error) {
+        console.log("Layout - erro ao carregar enabledLanguages:", error);
+      }
+    }
+    fetchSettings();
+  }, [user?.companyId]);
+
+  const filteredLanguageOptions = LANGUAGE_OPTIONS.filter((lang) =>
+    enabledLanguages.includes(lang.code)
+  );
+
+  if (loading || updateInProgress) {
     return <BackdropLoading />;
   }
 
   return (
-    <div className={classes.root}>
-      <Drawer
-        variant={drawerVariant}
-        className={drawerOpen ? classes.drawerPaper : classes.drawerPaperClose}
-        classes={{
-          paper: clsx(
-            classes.drawerPaper,
-            !drawerOpen && classes.drawerPaperClose
-          ),
-        }}
-        open={drawerOpen}
-      >
-        <div className={classes.toolbarIcon}>
-          <img src={logo} className={classes.logo} alt="logo" />
-          <IconButton onClick={() => setDrawerOpen(!drawerOpen)}>
-            <ChevronLeftIcon />
-          </IconButton>
-        </div>
-        <Divider />
-        <List className={classes.containerWithScroll}>
-          <MainListItems drawerClose={drawerClose} collapsed={!drawerOpen} />
-        </List>
-        <Divider />
-      </Drawer>
-      <UserModal
-        open={userModalOpen}
-        onClose={() => setUserModalOpen(false)}
-        userId={user?.id}
-      />
+    <div className={clsx(classes.root, "logged-in-layout")}>
+      {!hideMenu && (
+        <Drawer
+          variant={drawerVariant}
+          className={drawerOpen ? classes.drawerPaper : classes.drawerPaperClose}
+          classes={{
+            paper: clsx(
+              classes.drawerPaper,
+              !drawerOpen && classes.drawerPaperClose
+            ),
+          }}
+          open={drawerOpen}
+        >
+          <div className={classes.toolbarIcon}>
+            <img
+              className={drawerOpen ? classes.logo : classes.hideLogo}
+              style={{
+                display: "block",
+                margin: "0 auto",
+                //height: "50px",
+                width: "100%",
+              }}
+              alt="logo"
+            />
+            <IconButton onClick={() => setDrawerOpen(!drawerOpen)}>
+              <ChevronLeftIcon />
+            </IconButton>
+          </div>
+          <List className={classes.containerWithScroll}>
+            {/* {mainListItems} */}
+            <MainListItems collapsed={!drawerOpen} />
+          </List>
+          <Divider />
+        </Drawer>
+      )}
+
       <AppBar
         position="absolute"
-        className={clsx(classes.appBar, drawerOpen && classes.appBarShift)}
+        className={clsx(classes.appBar, !hideMenu && drawerOpen && classes.appBarShift)}
         color="primary"
       >
         <Toolbar variant="dense" className={classes.toolbar}>
-          <IconButton
-            edge="start"
-            variant="contained"
-            aria-label="open drawer"
-            onClick={() => setDrawerOpen(!drawerOpen)}
-            className={clsx(
-              classes.menuButton,
-              drawerOpen && classes.menuButtonHidden
-            )}
-          >
-            <MenuIcon />
-          </IconButton>
+          {!hideMenu && (
+            <IconButton
+              edge="start"
+              variant="contained"
+              aria-label="open drawer"
+              style={{ color: "white" }}
+              onClick={() => setDrawerOpen(!drawerOpen)}
+              className={clsx(drawerOpen && classes.menuButtonHidden)}
+            >
+              <MenuIcon />
+            </IconButton>
+          )}
 
           <Typography
             component="h2"
@@ -404,113 +784,276 @@ const LoggedInLayout = ({ children, themeToggle }) => {
             className={classes.title}
           >
             {/* {greaterThenSm && user?.profile === "admin" && getDateAndDifDays(user?.company?.dueDate).difData < 7 ? ( */}
-            {greaterThenSm && user?.profile === "admin" && user?.company?.dueDate ? (
+            {greaterThenSm &&
+              user?.profile === "admin" &&
+              user?.company?.dueDate ? (
               <>
-                {i18n.t("mainDrawer.appBar.greeting.hello")} <b>{user.name}</b>, {i18n.t("mainDrawer.appBar.greeting.welcome")} <b>{user?.company?.name}</b>! ({i18n.t("mainDrawer.appBar.greeting.active")} {dateToClient(user?.company?.dueDate)})
+                {i18n.t("mainDrawer.appBar.user.message")} <b>{user.name}</b>,{" "}
+                {i18n.t("mainDrawer.appBar.user.messageEnd")}{" "}
+                <b>{user?.company?.name}</b>! (
+                {i18n.t("mainDrawer.appBar.user.active")}{" "}
+                {dateToClient(user?.company?.dueDate)})
               </>
             ) : (
               <>
-                {i18n.t("mainDrawer.appBar.greeting.hello")} <b>{user.name}</b>, {i18n.t("mainDrawer.appBar.greeting.welcome")} <b>{user?.company?.name}</b>!
+                {i18n.t("mainDrawer.appBar.user.message")} <b>{user.name}</b>,{" "}
+                {i18n.t("mainDrawer.appBar.user.messageEnd")}{" "}
+                <b>{user?.company?.name}</b>!
               </>
             )}
           </Typography>
-          
-          <div>
-            <IconButton edge="start">
-              <LanguageOutlined
-                aria-label="account of current user"
-                aria-controls="menu-appbar"
-                aria-haspopup="true"
-                onClick={handlemenuLanguage}
-                variant="contained"
-                style={{ color: "white",marginRight:10 }}
+
+          {!hideMenu && (
+            <>
+              <VersionControl
+                onUpdateStart={handleUpdateStart}
+                onUpdateComplete={handleUpdateComplete}
               />
-            </IconButton>
-            <Menu
-              id="menu-appbar-language"
-              anchorEl={anchorElLanguage}
-              getContentAnchorEl={null}
-              anchorOrigin={{
-                vertical: "bottom",
-                horizontal: "right",
-              }}
-              transformOrigin={{
-                vertical: "top",
-                horizontal: "right",
-              }}
-              open={menuLanguageOpen}
-              onClose={handleCloseMenuLanguage}
-            >
-              <MenuItem>
-                <LanguageControl />
-              </MenuItem>
-            </Menu>
-          </div>          
 
-          <IconButton edge="start" onClick={toggleColorMode}>
-            {theme.mode === 'dark' ? <Brightness7Icon style={{ color: "white" }} /> : <Brightness4Icon style={{ color: "white" }} />}
-          </IconButton>
+              <div
+                style={{ position: "relative", display: "inline-block" }}
+                className="language-dropdown"
+              >
+                <button
+                  onClick={() => setShowOptions(!showOptions)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "white",
+                    cursor: "pointer",
+                    fontSize: "22px",
+                    paddingRight: "20px",
+                    paddingTop: "8px",
+                  }}
+                >
+                  <FaGlobe />
+                </button>
 
-          <NotificationsVolume
-            setVolume={setVolume}
-            volume={volume}
-          />
+                {showOptions && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "35px",
+                      left: "0",
+                      background: "#fff",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
+                      borderRadius: "8px",
+                      padding: "8px",
+                      zIndex: 1000,
+                      minWidth: "120px",
+                      maxWidth: "200px",
+                    }}
+                  >
+                    {filteredLanguageOptions.map((lang) => (
+                      <button
+                        key={lang.code}
+                        onClick={() => handleLanguageChange(lang.code)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          display: "block",
+                          width: "100%",
+                          padding: "4px",
+                        }}
+                      >
+                        {lang.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-          <IconButton
-            onClick={handleRefreshPage}
-            aria-label={i18n.t("mainDrawer.appBar.refresh")}
-            color="inherit"
-          >
-            <CachedIcon style={{ color: "white" }} />
-          </IconButton>
+              <IconButton edge="start" onClick={colorMode.toggleColorMode}>
+                {theme.mode === "dark" ? (
+                  <Brightness7Icon style={{ color: "white" }} />
+                ) : (
+                  <Brightness4Icon style={{ color: "white" }} />
+                )}
+              </IconButton>
 
-          {user.id && <NotificationsPopOver volume={volume} />}
+              <NotificationsVolume setVolume={setVolume} volume={volume} />
 
-          <AnnouncementsPopover />
+              <IconButton
+                onClick={handleRefreshPage}
+                aria-label={i18n.t("mainDrawer.appBar.refresh")}
+                color="inherit"
+              >
+                <CachedIcon style={{ color: "white" }} />
+              </IconButton>
 
-          <ChatPopover />
+              {/* <DarkMode themeToggle={themeToggle} /> */}
 
-          <div>
-            <IconButton
-              aria-label="account of current user"
-              aria-controls="menu-appbar"
-              aria-haspopup="true"
-              onClick={handleMenu}
-              variant="contained"
-              style={{ color: "white" }}
-            >
-              <AccountCircle />
-            </IconButton>
-            <Menu
-              id="menu-appbar"
-              anchorEl={anchorEl}
-              getContentAnchorEl={null}
-              anchorOrigin={{
-                vertical: "bottom",
-                horizontal: "right",
-              }}
-              transformOrigin={{
-                vertical: "top",
-                horizontal: "right",
-              }}
-              open={menuOpen}
-              onClose={handleCloseMenu}
-            >
-              <MenuItem onClick={handleOpenUserModal}>
-                {i18n.t("mainDrawer.appBar.user.profile")}
-              </MenuItem>
-              <MenuItem onClick={handleClickLogout}>
-                {i18n.t("mainDrawer.appBar.user.logout")}
-              </MenuItem>
-            </Menu>
-          </div>
+              {user.id && <NotificationsPopOver volume={volume} />}
+
+              <AnnouncementsPopover />
+
+              <ChatPopover />
+
+
+
+              <div className="user-menu-wrapper">
+                <StyledBadge
+                  overlap="circular"
+                  anchorOrigin={{
+                    vertical: "bottom",
+                    horizontal: "right",
+                  }}
+                  variant="dot"
+                  onClick={handleMenu}
+                >
+                  <Avatar
+                    alt="AtendeChat"
+                    className={classes.avatar2}
+                    src={profileUrl}
+                  />
+                </StyledBadge>
+
+                <UserModal
+                  open={userModalOpen}
+                  onClose={() => setUserModalOpen(false)}
+                  onImageUpdate={(newProfileUrl) => setProfileUrl(newProfileUrl)}
+                  userId={user?.id}
+                />
+
+                <Menu
+                  id="menu-appbar"
+                  anchorEl={anchorEl}
+                  getContentAnchorEl={null}
+                  anchorOrigin={{
+                    vertical: "bottom",
+                    horizontal: "right",
+                  }}
+                  transformOrigin={{
+                    vertical: "top",
+                    horizontal: "right",
+                  }}
+                  open={menuOpen}
+                  onClose={handleCloseMenu}
+                  PaperProps={{
+                    style: {
+                      minWidth: "150px",
+                      maxWidth: "200px",
+                      width: "auto",
+                    },
+                  }}
+                >
+                  <MenuItem onClick={handleOpenUserModal}>
+                    {i18n.t("mainDrawer.appBar.user.profile")}
+                  </MenuItem>
+                  <MenuItem onClick={handleClickLogout}>
+                    {i18n.t("mainDrawer.appBar.user.logout")}
+                  </MenuItem>
+                </Menu>
+              </div>
+            </>
+          )}
         </Toolbar>
       </AppBar>
       <main className={classes.content}>
         <div className={classes.appBarSpacer} />
-
         {children ? children : null}
       </main>
+
+      {/* Modal de Informativos */}
+      <Dialog
+        open={showAnnouncementsModal}
+        onClose={() => setShowAnnouncementsModal(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Informativos</DialogTitle>
+        <DialogContent dividers>
+          {selectedAnnouncement ? (
+            <div>
+              <Typography variant="h6" gutterBottom>
+                {selectedAnnouncement.title}
+              </Typography>
+              <Typography variant="body1" style={{ whiteSpace: 'pre-line' }}>
+                {selectedAnnouncement.text}
+              </Typography>
+              <FormControlLabel
+                style={{ marginTop: 12 }}
+                control={
+                  <Checkbox
+                    color="primary"
+                    checked={ackChecked}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setAckChecked(checked);
+                      handleToggleAcknowledge(selectedAnnouncement.id, checked);
+                    }}
+                  />
+                }
+                label="Estou ciente e não mostrar novamente"
+              />
+              {selectedAnnouncement.mediaPath && (
+                <div style={{ marginTop: 16 }}>
+                  <img
+                    src={`${backendUrl}/public/company${user.companyId}${selectedAnnouncement.mediaPath}`}
+                    alt="Anexo"
+                    style={{ maxWidth: '100%' }}
+                  />
+                </div>
+              )}
+              <Button
+                onClick={() => setSelectedAnnouncement(null)}
+                style={{ marginTop: 16 }}
+                variant="outlined"
+              >
+                Voltar para lista
+              </Button>
+            </div>
+          ) : (
+            <List>
+              {announcements.map((announcement) => (
+                <ListItem
+                  button
+                  key={announcement.id}
+                  onClick={() => setSelectedAnnouncement(announcement)}
+                >
+                  <ListItemAvatar>
+                    <Avatar>
+                      <NotificationsIcon />
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={announcement.title}
+                    secondary={
+                      <>
+                        <Typography
+                          component="span"
+                          variant="body2"
+                          color="textPrimary"
+                        >
+                          Prioridade: {announcement.priority === 1 ? 'Alta' : announcement.priority === 2 ? 'Média' : 'Baixa'}
+                        </Typography>
+                        {` — ${new Date(announcement.createdAt).toLocaleDateString()}`}
+                      </>
+                    }
+                  />
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setShowAnnouncementsModal(false)}
+            color="primary"
+          >
+            Fechar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal de Aniversário */}
+      <BirthdayModal
+        open={showBirthdayModal}
+        onClose={() => setShowBirthdayModal(false)}
+        user={user}
+      />
+
     </div>
   );
 };

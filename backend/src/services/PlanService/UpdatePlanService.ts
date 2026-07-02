@@ -7,7 +7,10 @@ interface PlanData {
   users?: number;
   connections?: number;
   queues?: number;
-  value?: number;
+  amount?: string;
+  useWhatsapp?: boolean;
+  useFacebook?: boolean;
+  useInstagram?: boolean;
   useCampaigns?: boolean;
   useSchedules?: boolean;
   useInternalChat?: boolean;
@@ -15,12 +18,18 @@ interface PlanData {
   useKanban?: boolean;
   useOpenAi?: boolean;
   useIntegrations?: boolean;
+  isPublic?: boolean;
+  useWhatsappOfficial?: boolean;
+  trial?: boolean;
+  trialDays?: number;
+  recurrence?: string;
+  wavoip?: boolean;
 }
 
 const UpdatePlanService = async (planData: PlanData): Promise<Plan> => {
-  const { id, name, users, connections, queues, value } = planData;
+  const { id } = planData;
 
-  const plan = await Plan.findByPk(id);
+  let plan = await Plan.findByPk(id);
 
   if (!plan) {
     throw new AppError("ERR_NO_PLAN_FOUND", 404);

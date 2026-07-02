@@ -4,7 +4,8 @@ import {
   CreatedAt,
   UpdatedAt,
   Model,
-  ForeignKey
+  ForeignKey,
+  BelongsTo
 } from "sequelize-typescript";
 import Queue from "./Queue";
 import User from "./User";
@@ -24,6 +25,12 @@ class UserQueue extends Model<UserQueue> {
 
   @UpdatedAt
   updatedAt: Date;
+
+  @BelongsTo(() => User)
+  user: User;
+
+  @BelongsTo(() => Queue)
+  queue: Queue;
 }
 
 export default UserQueue;

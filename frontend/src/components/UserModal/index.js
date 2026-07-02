@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useRef } from "react";
 
 import * as Yup from "yup";
 import { Formik, Form, Field } from "formik";
@@ -17,315 +17,1192 @@ import Select from "@material-ui/core/Select";
 import InputLabel from "@material-ui/core/InputLabel";
 import MenuItem from "@material-ui/core/MenuItem";
 import FormControl from "@material-ui/core/FormControl";
-
+import whatsappIcon from "../../assets/nopicture.png";
 import { i18n } from "../../translate/i18n";
 
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import QueueSelect from "../QueueSelect";
 import { AuthContext } from "../../context/Auth/AuthContext";
-import { Can } from "../Can";
 import useWhatsApps from "../../hooks/useWhatsApps";
 
-const useStyles = makeStyles(theme => ({
-	root: {
-		display: "flex",
-		flexWrap: "wrap",
-	},
-	multFieldLine: {
-		display: "flex",
-		"& > *:not(:last-child)": {
-			marginRight: theme.spacing(1),
-		},
-	},
+import { Can } from "../Can";
+import { Avatar, Grid, Input, Paper, Tab, Tabs } from "@material-ui/core";
+import { getBackendUrl } from "../../config";
+import TabPanel from "../TabPanel";
+import AvatarUploader from "../AvatarUpload";
 
-	btnWrapper: {
-		position: "relative",
-	},
+const backendUrl = getBackendUrl();
 
-	buttonProgress: {
-		color: green[500],
-		position: "absolute",
-		top: "50%",
-		left: "50%",
-		marginTop: -12,
-		marginLeft: -12,
-	},
-	formControl: {
-		margin: theme.spacing(1),
-		minWidth: 120,
-	},
+const formatDateForInput = (date) => {
+  if (!date) return '';
+  
+  // Se já está no formato YYYY-MM-DD, retorna como está
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return date;
+  }
+  
+  // Se é uma data ISO ou objeto Date, converte para YYYY-MM-DD
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+  
+  // Usar métodos locais para evitar problemas de timezone
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  
+  return `${year}-${month}-${day}`;
+};
+
+const parseDateFromInput = (dateString) => {
+  if (!dateString) return null;
+  
+  // Se já está no formato YYYY-MM-DD, retorna como está
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    return dateString;
+  }
+  
+  // Se é uma data ISO, extrai apenas a parte da data
+  if (dateString.includes('T')) {
+    return dateString.split('T')[0];
+  }
+  
+  return dateString;
+};
+
+const useStyles = makeStyles((theme) => ({
+  root: {
+    display: "flex",
+    flexWrap: "wrap",
+  },
+  multFieldLine: {
+    display: "flex",
+    "& > *:not(:last-child)": {
+      marginRight: theme.spacing(1),
+    },
+  },
+  btnWrapper: {
+    position: "relative",
+  },
+  buttonProgress: {
+    color: green[500],
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    marginTop: -12,
+    marginLeft: -12,
+  },
+  formControl: {
+    margin: theme.spacing(1),
+    minWidth: 120,
+  },
+  textField: {
+    marginRight: theme.spacing(1),
+    flex: 1,
+  },
+  container: {
+    display: "flex",
+    flexWrap: "wrap",
+  },
+  avatar: {
+    width: theme.spacing(12),
+    height: theme.spacing(12),
+    margin: theme.spacing(2),
+    cursor: "pointer",
+    borderRadius: "50%",
+    border: "2px solid #ccc",
+  },
+  updateDiv: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  updateInput: {
+    display: "none",
+  },
+  updateLabel: {
+    padding: theme.spacing(1),
+    margin: theme.spacing(1),
+    textTransform: "uppercase",
+    textAlign: "center",
+    cursor: "pointer",
+    border: "2px solid #ccc",
+    borderRadius: "5px",
+    minWidth: 160,
+    fontWeight: "bold",
+    color: "#555",
+  },
+  errorUpdate: {
+    border: "2px solid red",
+  },
+  errorText: {
+    color: "red",
+    fontSize: "0.8rem",
+    fontWeight: "bold",
+  },
 }));
 
 const UserSchema = Yup.object().shape({
-	name: Yup.string()
-		.min(2, i18n.t("userModal.formErrors.name.short"))
-		.max(50, i18n.t("userModal.formErrors.name.long"))
-		.required(i18n.t("userModal.formErrors.name.required")),
-	password: Yup.string().min(5, i18n.t("userModal.formErrors.password.short")).max(50, i18n.t("userModal.formErrors.password.long")),
-	email: Yup.string().email(i18n.t("userModal.formErrors.email.invalid")).required(i18n.t("userModal.formErrors.email.required")),
+  name: Yup.string()
+    .min(2, "Too Short!")
+    .max(50, "Too Long!")
+    .required("Required"),
+  password: Yup.string().min(5, "Too Short!").max(50, "Too Long!"),
+  email: Yup.string().email("Invalid email").required("Required"),
+  allHistoric: Yup.string().nullable(),
 });
 
+
 const UserModal = ({ open, onClose, userId }) => {
-	const classes = useStyles();
+  const classes = useStyles();
 
-	const initialState = {
-		name: "",
-		email: "",
-		password: "",
-		profile: "user",
-		allTicket: "desabled"
-	};
+  const initialState = {
+    name: "",
+    email: "",
+    password: "",
+    birthDate: "",
+    profile: "user",
+    startWork: "00:00",
+    endWork: "23:59",
+    farewellMessage: "",
+    allTicket: "enable",
+    allowGroup: false,
+    defaultTheme: "light",
+    defaultMenu: "open",
+    allHistoric: "enabled",
+    allUserChat: "enabled",
+    userClosePendingTicket: "enabled",
+    showDashboard: "enabled",
+    allowRealTime: "enabled",
+    allowConnections: "enabled",
+    showContacts: "enabled",
+    showCampaign: "enabled",
+    showFlow: "enabled",
+    finalizacaoComValorVendaAtiva: "false",
+    allowSeeMessagesInPendingTickets: "enabled"
+  };
 
-	const { user: loggedInUser } = useContext(AuthContext);
+  const { user: loggedInUser } = useContext(AuthContext);
 
-	const [user, setUser] = useState(initialState);
-	const [selectedQueueIds, setSelectedQueueIds] = useState([]);
-	const [whatsappId, setWhatsappId] = useState(false);
-	const { loading, whatsApps } = useWhatsApps();
+  const [user, setUser] = useState(initialState);
+  const [selectedQueueIds, setSelectedQueueIds] = useState([]);
+  const [whatsappId, setWhatsappId] = useState(false);
+  // const [allTicket, setAllTicket] = useState("disable");
+  const { loading, whatsApps } = useWhatsApps();
+  const [profileUrl, setProfileUrl] = useState(null);
+  const [tab, setTab] = useState("general");
+  const [avatar, setAvatar] = useState(null);
+  const startWorkRef = useRef();
+  const endWorkRef = useRef();
 
-	useEffect(() => {
-		const fetchUser = async () => {
-			if (!userId) return;
-			try {
-				const { data } = await api.get(`/users/${userId}`);
-				setUser(prevState => {
-					return { ...prevState, ...data };
-				});
-				const userQueueIds = data.queues?.map(queue => queue.id);
-				setSelectedQueueIds(userQueueIds);
-				setWhatsappId(data.whatsappId ? data.whatsappId : '');
-			} catch (err) {
-				toastError(err);
-			}
-		};
+  useEffect(() => {
+    const fetchUser = async () => {
+      if (!userId) return;
+      try {
+        const { data } = await api.get(`/users/${userId}`);
+        setUser((prevState) => ({
+          ...prevState,
+          ...data,
+          allTicket:
+            data.allTicket === "enable" || data.allTicket === "enabled"
+              ? "enable"
+              : "disable",
+          finalizacaoComValorVendaAtiva: data.finalizacaoComValorVendaAtiva
+            ? "true"
+            : "false",
+          allowSeeMessagesInPendingTickets: data.allowSeeMessagesInPendingTickets === "enabled" ? "enabled" : "disabled",
+          farewellMessage: data.farewellMessage || "",
+          // Formatar a data corretamente
+          birthDate: formatDateForInput(data.birthDate)
+        }));
 
-		fetchUser();
-	}, [userId, open]);
+        const { profileImage } = data;
+        setProfileUrl(
+          `${backendUrl}/public/company${data.companyId}/user/${profileImage}`
+        );
 
-	const handleClose = () => {
-		onClose();
-		setUser(initialState);
-	};
+        const userQueueIds = data.queues?.map((queue) => queue.id);
+        setSelectedQueueIds(userQueueIds);
+        setWhatsappId(data.whatsappId ? data.whatsappId : "");
+      } catch (err) {
+        toastError(err);
+      }
+    };
 
-	const handleSaveUser = async values => {
-		const userData = { ...values, whatsappId, queueIds: selectedQueueIds, allTicket: values.allTicket };
-		try {
-			if (userId) {
-				await api.put(`/users/${userId}`, userData);
-			} else {
-				await api.post("/users", userData);
-			}
-			toast.success(i18n.t("userModal.success"));
-		} catch (err) {
-			toastError(err);
-		}
-		handleClose();
-	};
+    fetchUser();
+  }, [userId, open]);
 
-	return (
-		<div className={classes.root}>
-			<Dialog
-				open={open}
-				onClose={handleClose}
-				maxWidth="xs"
-				fullWidth
-				scroll="paper"
-			>
-				<DialogTitle id="form-dialog-title">
-					{userId
-						? `${i18n.t("userModal.title.edit")}`
-						: `${i18n.t("userModal.title.add")}`}
-				</DialogTitle>
-				<Formik
-					initialValues={user}
-					enableReinitialize={true}
-					validationSchema={UserSchema}
-					onSubmit={(values, actions) => {
-						setTimeout(() => {
-							handleSaveUser(values);
-							actions.setSubmitting(false);
-						}, 400);
-					}}
-				>
-					{({ touched, errors, isSubmitting }) => (
-						<Form>
-							<DialogContent dividers>
-								<div className={classes.multFieldLine}>
-									<Field
-										as={TextField}
-										label={i18n.t("userModal.form.name")}
-										autoFocus
-										name="name"
-										error={touched.name && Boolean(errors.name)}
-										helperText={touched.name && errors.name}
-										variant="outlined"
-										margin="dense"
-										fullWidth
-									/>
-									<Field
-										as={TextField}
-										label={i18n.t("userModal.form.password")}
-										type="password"
-										name="password"
-										error={touched.password && Boolean(errors.password)}
-										helperText={touched.password && errors.password}
-										variant="outlined"
-										margin="dense"
-										fullWidth
-									/>
-								</div>
-								<div className={classes.multFieldLine}>
-									<Field
-										as={TextField}
-										label={i18n.t("userModal.form.email")}
-										name="email"
-										error={touched.email && Boolean(errors.email)}
-										helperText={touched.email && errors.email}
-										variant="outlined"
-										margin="dense"
-										fullWidth
-									/>
-									<FormControl
-										variant="outlined"
-										className={classes.formControl}
-										margin="dense"
-									>
-										<Can
-											role={loggedInUser.profile}
-											perform="user-modal:editProfile"
-											yes={() => (
-												<>
-													<InputLabel id="profile-selection-input-label">
-														{i18n.t("userModal.form.profile")}
-													</InputLabel>
+  const handleClose = () => {
+    onClose();
+    setUser(initialState);
+  };
 
-													<Field
-														as={Select}
-														label={i18n.t("userModal.form.profile")}
-														name="profile"
-														labelId="profile-selection-label"
-														id="profile-selection"
-														required
-													>
-														<MenuItem value="admin">Admin</MenuItem>
-														<MenuItem value="user">User</MenuItem>
-													</Field>
-												</>
-											)}
-										/>
-									</FormControl>
-								</div>
-								<Can
-									role={loggedInUser.profile}
-									perform="user-modal:editQueues"
-									yes={() => (
-										<QueueSelect
-											selectedQueueIds={selectedQueueIds}
-											onChange={values => setSelectedQueueIds(values)}
-										/>
-									)}
-								/>
-								<Can
-									role={loggedInUser.profile}
-									perform="user-modal:editProfile"
-									yes={() => (
-										<FormControl variant="outlined" margin="dense" className={classes.maxWidth} fullWidth>
-											<InputLabel>
-												{i18n.t("userModal.form.whatsapp")}
-											</InputLabel>
-											<Field
-												as={Select}
-												value={whatsappId}
-												onChange={(e) => setWhatsappId(e.target.value)}
-												label={i18n.t("userModal.form.whatsapp")}
+  const handleTabChange = (event, newValue) => {
+    setTab(newValue);
+  };
 
-											>
-												<MenuItem value={''}>&nbsp;</MenuItem>
-												{whatsApps.map((whatsapp) => (
-													<MenuItem key={whatsapp.id} value={whatsapp.id}>{whatsapp.name}</MenuItem>
-												))}
-											</Field>
-										</FormControl>
-									)}
-								/>
-								
-								
-								
-								<div className={classes.divider}>
-									<span className={classes.dividerText}>
-										{i18n.t("userModal.labels.liberations")}
-									</span>
-								</div>
-								
-								<Can
-									role={loggedInUser.profile}
-									perform="user-modal:editProfile"
-									yes={() => (!loading &&
-										<div className={classes.textField}>
-											<FormControl
-												variant="outlined"
-												className={classes.maxWidth}
-												margin="dense"
-												fullWidth
-											>
-												<>
-													<InputLabel id="profile-selection-input-label">
-														{i18n.t("userModal.form.allTicket")}
-													</InputLabel>
+  const getBasename = (filepath) => {
+    if (!filepath) return '';
+    // Remove query strings e hashes
+    const cleanPath = filepath.split('?')[0].split('#')[0];
+    // Pega o último segmento após /
+    const segments = cleanPath.split('/');
+    return segments[segments.length - 1];
+  };
 
-													<Field
-														as={Select}
-														label={i18n.t("allTicket.form.viewTags")}
-														name="allTicket"
-														labelId="allTicket-selection-label"
-														id="allTicket-selection"
-														required
-													>
-														<MenuItem value="enabled">{i18n.t("userModal.form.allTicketEnabled")}</MenuItem>
-														<MenuItem value="desabled">{i18n.t("userModal.form.allTicketDesabled")}</MenuItem>
-													</Field>
-												</>
-											</FormControl>
-										</div>
+  // UserModal/index.js - Função handleSaveUser corrigida
+  const handleSaveUser = async (values) => {
+    const uploadAvatar = async (userId) => {
+      if (!avatar || typeof avatar !== 'object') return null;
 
-									)}
-								/>
-								
-							</DialogContent>
-							<DialogActions>
-								<Button
-									onClick={handleClose}
-									color="secondary"
-									disabled={isSubmitting}
-									variant="outlined"
-								>
-									{i18n.t("userModal.buttons.cancel")}
-								</Button>
-								<Button
-									type="submit"
-									color="primary"
-									disabled={isSubmitting}
-									variant="contained"
-									className={classes.btnWrapper}
-								>
-									{userId
-										? `${i18n.t("userModal.buttons.okEdit")}`
-										: `${i18n.t("userModal.buttons.okAdd")}`}
-									{isSubmitting && (
-										<CircularProgress
-											size={24}
-											className={classes.buttonProgress}
-										/>
-									)}
-								</Button>
-							</DialogActions>
-						</Form>
-					)}
-				</Formik>
-			</Dialog>
-		</div>
-	);
+      const formData = new FormData();
+      formData.append("userId", userId);
+      formData.append("typeArch", "user");
+      formData.append("profileImage", avatar);
+
+      try {
+        const { data } = await api.post(
+          `/users/${userId}/media-upload`,
+          formData,
+          {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+          }
+        );
+
+        return data.user.profileImage;
+      } catch (error) {
+        console.error("Erro no upload da imagem:", error);
+        throw error;
+      }
+    };
+
+    const userData = {
+      ...values,
+      whatsappId,
+      queueIds: selectedQueueIds,
+      finalizacaoComValorVendaAtiva: values.finalizacaoComValorVendaAtiva === "true",
+      birthDate: parseDateFromInput(values.birthDate),
+      allowSeeMessagesInPendingTickets: values.allowSeeMessagesInPendingTickets === "enabled" ? "enabled" : "disabled"
+    };
+
+    try {
+      let responseData;
+
+      if (userId) {
+        // Atualizar usuário existente
+        const { data } = await api.put(`/users/${userId}`, userData);
+        responseData = data;
+
+        // Upload da imagem se houver uma nova
+        if (avatar && typeof avatar === 'object') {
+          const newProfileImage = await uploadAvatar(userId);
+          if (newProfileImage) {
+            responseData.profileImage = newProfileImage;
+
+            // Atualizar localStorage se for o usuário logado
+            if (userId === loggedInUser.id) {
+              localStorage.setItem("profileImage", newProfileImage);
+            }
+          }
+        }
+      } else {
+        // Criar novo usuário
+        const { data } = await api.post("/users", userData);
+        responseData = data.user;
+
+        // Upload da imagem se houver
+        if (avatar && typeof avatar === 'object' && responseData.id) {
+          const newProfileImage = await uploadAvatar(responseData.id);
+          if (newProfileImage) {
+            responseData.profileImage = newProfileImage;
+          }
+        }
+      }
+
+      handleClose();
+      toast.success(i18n.t("userModal.success"));
+
+      // Recarregar página se for o usuário logado para atualizar a interface
+      if (userId === loggedInUser.id) {
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      }
+    } catch (err) {
+      toastError(err);
+    }
+  };
+
+  return (
+    <div className={classes.root}>
+      <Dialog
+        open={open}
+        onClose={handleClose}
+        maxWidth="sm"
+        fullWidth
+        scroll="paper"
+      >
+        <DialogTitle id="form-dialog-title">
+          {userId
+            ? `${i18n.t("userModal.title.edit")}`
+            : `${i18n.t("userModal.title.add")}`}
+        </DialogTitle>
+        <Formik
+          initialValues={user}
+          enableReinitialize={true}
+          validationSchema={UserSchema}
+          onSubmit={(values, actions) => {
+            setTimeout(() => {
+              handleSaveUser(values);
+              actions.setSubmitting(false);
+            }, 400);
+          }}
+        >
+          {({ touched, errors, isSubmitting, setFieldValue }) => (
+            <Form>
+              <Paper className={classes.mainPaper} elevation={1}>
+                <Tabs
+                  value={tab}
+                  indicatorColor="primary"
+                  textColor="primary"
+                  scrollButtons="on"
+                  variant="scrollable"
+                  onChange={handleTabChange}
+                  className={classes.tab}
+                >
+                  <Tab
+                    label={i18n.t("userModal.tabs.general")}
+                    value={"general"}
+                  />
+                  <Tab
+                    label={i18n.t("userModal.tabs.permissions")}
+                    value={"permissions"}
+                  />
+                </Tabs>
+              </Paper>
+              <Paper className={classes.paper} elevation={0}>
+                <DialogContent dividers>
+                  <TabPanel
+                    className={classes.container}
+                    value={tab}
+                    name={"general"}
+                  >
+                    <Grid
+                      container
+                      spacing={1}
+                      alignContent="center"
+                      alignItems="center"
+                      justifyContent="center"
+                    >
+                      <FormControl className={classes.updateDiv}>
+                        <AvatarUploader
+                          setAvatar={setAvatar}
+                          avatar={user.profileImage}
+                          companyId={user.companyId}
+                        />
+                        {user.profileImage && (
+                          <Button
+                            variant="outlined"
+                            color="secondary"
+                            onClick={() => {
+                              user.profileImage = null;
+                              setFieldValue("profileImage", null);
+                              setAvatar(null);
+                            }}
+                          >
+                            {i18n.t("userModal.title.removeImage")}
+                          </Button>
+                        )}
+                      </FormControl>
+                    </Grid>
+                    <Grid container spacing={1}>
+                      <Grid item xs={12} md={6} xl={6}>
+                        <Field
+                          as={TextField}
+                          label={i18n.t("userModal.form.name")}
+                          autoFocus
+                          name="name"
+                          error={touched.name && Boolean(errors.name)}
+                          helperText={touched.name && errors.name}
+                          variant="outlined"
+                          margin="dense"
+                          fullWidth
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={6} xl={6}>
+                        <Field
+                          as={TextField}
+                          label={i18n.t("userModal.form.password")}
+                          type="password"
+                          name="password"
+                          error={touched.password && Boolean(errors.password)}
+                          helperText={touched.password && errors.password}
+                          variant="outlined"
+                          margin="dense"
+                          fullWidth
+                        />
+                      </Grid>
+                    </Grid>
+                    <Grid container spacing={1}>
+                      <Grid item xs={12} md={8} xl={8}>
+                        <Field
+                          as={TextField}
+                          label={i18n.t("userModal.form.email")}
+                          name="email"
+                          error={touched.email && Boolean(errors.email)}
+                          helperText={touched.email && errors.email}
+                          variant="outlined"
+                          margin="dense"
+                          fullWidth
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={4} xl={4}>
+                        <FormControl
+                          variant="outlined"
+                          //className={classes.formControl}
+                          margin="dense"
+                          fullWidth
+                        >
+                          <Can
+                            role={loggedInUser.profile}
+                            perform="user-modal:editProfile"
+                            yes={() => (
+                              <>
+                                <InputLabel id="profile-selection-input-label">
+                                  {i18n.t("userModal.form.profile")}
+                                </InputLabel>
+
+                                <Field
+                                  as={Select}
+                                  label={i18n.t("userModal.form.profile")}
+                                  name="profile"
+                                  labelId="profile-selection-label"
+                                  id="profile-selection"
+                                  required
+                                >
+                                  <MenuItem value="admin">Admin</MenuItem>
+                                  <MenuItem value="user">User</MenuItem>
+                                </Field>
+                              </>
+                            )}
+                          />
+                        </FormControl>
+                      </Grid>
+                    </Grid>
+                    <Grid container spacing={1}>
+                      <Grid item xs={12} md={12} xl={12}>
+                        <Can
+                          role={loggedInUser.profile}
+                          perform="user-modal:editQueues"
+                          yes={() => (
+                            <QueueSelect
+                              selectedQueueIds={selectedQueueIds}
+                              onChange={(values) => setSelectedQueueIds(values)}
+                              fullWidth
+                            />
+                          )}
+                        />
+                      </Grid>
+                    </Grid>
+                    <Grid container spacing={1}>
+                      <Grid item xs={12} md={12} xl={12}>
+                        <Can
+                          role={loggedInUser.profile}
+                          perform="user-modal:editProfile"
+                          yes={() => (
+                            <FormControl
+                              variant="outlined"
+                              margin="dense"
+                              className={classes.maxWidth}
+                              fullWidth
+                            >
+                              <InputLabel>
+                                {i18n.t("userModal.form.whatsapp")}
+                              </InputLabel>
+                              <Field
+                                as={Select}
+                                value={whatsappId}
+                                onChange={(e) => setWhatsappId(e.target.value)}
+                                label={i18n.t("userModal.form.whatsapp")}
+                              >
+                                <MenuItem value={""}>&nbsp;</MenuItem>
+                                {whatsApps.map((whatsapp) => (
+                                  <MenuItem
+                                    key={whatsapp.id}
+                                    value={whatsapp.id}
+                                  >
+                                    {whatsapp.name}
+                                  </MenuItem>
+                                ))}
+                              </Field>
+                            </FormControl>
+                          )}
+                        />
+                      </Grid>
+                    </Grid>
+                    <Can
+                      role={loggedInUser.profile}
+                      perform="user-modal:editProfile"
+                      yes={() => (
+                        <Grid container spacing={1}>
+                          <Grid item xs={12} md={6} xl={6}>
+                            <Field
+                              as={TextField}
+                              label={i18n.t("userModal.form.startWork")}
+                              type="time"
+                              ampm={"false"}
+                              inputRef={startWorkRef}
+                              InputLabelProps={{
+                                shrink: true,
+                              }}
+                              inputProps={{
+                                step: 600, // 5 min
+                              }}
+                              fullWidth
+                              name="startWork"
+                              error={
+                                touched.startWork && Boolean(errors.startWork)
+                              }
+                              helperText={touched.startWork && errors.startWork}
+                              variant="outlined"
+                              margin="dense"
+                              className={classes.textField}
+                            />
+                          </Grid>
+                          <Grid item xs={12} md={6} xl={6}>
+                            <Field
+                              as={TextField}
+                              label={i18n.t("userModal.form.endWork")}
+                              type="time"
+                              ampm={"false"}
+                              inputRef={endWorkRef}
+                              InputLabelProps={{
+                                shrink: true,
+                              }}
+                              inputProps={{
+                                step: 600, // 5 min
+                              }}
+                              fullWidth
+                              name="endWork"
+                              error={touched.endWork && Boolean(errors.endWork)}
+                              helperText={touched.endWork && errors.endWork}
+                              variant="outlined"
+                              margin="dense"
+                              className={classes.textField}
+                            />
+                          </Grid>
+                        </Grid>
+                      )}
+                    />
+
+                    <Grid container spacing={1}>
+                      <Grid item xs={12} md={6} xl={6}>
+                        <Field
+                          as={TextField}
+                          label="Data de Nascimento"
+                          type="date"
+                          name="birthDate"
+                          InputLabelProps={{
+                            shrink: true,
+                          }}
+                          fullWidth
+                          variant="outlined"
+                          margin="dense"
+                          className={classes.textField}
+                          helperText="Data de nascimento para notificações de aniversário"
+                          onChange={(e) => {
+                            const formattedDate = parseDateFromInput(e.target.value);
+                            setFieldValue('birthDate', formattedDate);
+                          }}
+                        />
+                      </Grid>
+                    </Grid>
+
+                    <Field
+                      as={TextField}
+                      label={i18n.t("userModal.form.farewellMessage")}
+                      type="farewellMessage"
+                      multiline
+                      rows={4}
+                      fullWidth
+                      name="farewellMessage"
+                      error={
+                        touched.farewellMessage &&
+                        Boolean(errors.farewellMessage)
+                      }
+                      helperText={
+                        touched.farewellMessage && errors.farewellMessage
+                      }
+                      variant="outlined"
+                      margin="dense"
+                    />
+
+                    <Grid container spacing={1}>
+                      <Grid item xs={12} md={6} xl={6}>
+                        <FormControl
+                          variant="outlined"
+                          className={classes.maxWidth}
+                          margin="dense"
+                          fullWidth
+                        >
+                          <>
+                            <InputLabel>
+                              {i18n.t("userModal.form.defaultTheme")}
+                            </InputLabel>
+
+                            <Field
+                              as={Select}
+                              label={i18n.t("userModal.form.defaultTheme")}
+                              name="defaultTheme"
+                              type="defaultTheme"
+                              required
+                            >
+                              <MenuItem value="light">
+                                {i18n.t("userModal.form.defaultThemeLight")}
+                              </MenuItem>
+                              <MenuItem value="dark">
+                                {i18n.t("userModal.form.defaultThemeDark")}
+                              </MenuItem>
+                            </Field>
+                          </>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={12} md={6} xl={6}>
+                        <FormControl
+                          variant="outlined"
+                          className={classes.maxWidth}
+                          margin="dense"
+                          fullWidth
+                        >
+                          <>
+                            <InputLabel>
+                              {i18n.t("userModal.form.defaultMenu")}
+                            </InputLabel>
+
+                            <Field
+                              as={Select}
+                              label={i18n.t("userModal.form.defaultMenu")}
+                              name="defaultMenu"
+                              type="defaultMenu"
+                              required
+                            >
+                              <MenuItem value={"open"}>
+                                {i18n.t("userModal.form.defaultMenuOpen")}
+                              </MenuItem>
+                              <MenuItem value={"closed"}>
+                                {i18n.t("userModal.form.defaultMenuClosed")}
+                              </MenuItem>
+                            </Field>
+                          </>
+                        </FormControl>
+                      </Grid>
+                    </Grid>
+                  </TabPanel>
+                  <TabPanel
+                    className={classes.container}
+                    value={tab}
+                    name={"permissions"}
+                  >
+                    <Can
+                      role={loggedInUser.profile}
+                      perform="user-modal:editProfile"
+                      yes={() => (
+                        <>
+                          <Grid container spacing={1}>
+                            <Grid item xs={12} md={6} xl={6}>
+                              <FormControl
+                                variant="outlined"
+                                className={classes.maxWidth}
+                                margin="dense"
+                                fullWidth
+                              >
+                                <>
+                                  <InputLabel>
+                                    {i18n.t("userModal.form.allTicket")}
+                                  </InputLabel>
+
+                                  <Field
+                                    as={Select}
+                                    label={i18n.t("userModal.form.allTicket")}
+                                    name="allTicket"
+                                    type="allTicket"
+                                    required
+                                  >
+                                    <MenuItem value="enable">
+                                      {i18n.t("userModal.form.allTicketEnable")}
+                                    </MenuItem>
+                                    <MenuItem value="disable">
+                                      {i18n.t(
+                                        "userModal.form.allTicketDisable"
+                                      )}
+                                    </MenuItem>
+                                  </Field>
+                                </>
+                              </FormControl>
+                            </Grid>
+                            <Grid item xs={12} md={6} xl={6}>
+                              <FormControl
+                                variant="outlined"
+                                className={classes.maxWidth}
+                                margin="dense"
+                                fullWidth
+                              >
+                                <>
+                                  <InputLabel>
+                                    {i18n.t("userModal.form.allowGroup")}
+                                  </InputLabel>
+
+                                  <Field
+                                    as={Select}
+                                    label={i18n.t("userModal.form.allowGroup")}
+                                    name="allowGroup"
+                                    type="allowGroup"
+                                    required
+                                  >
+                                    <MenuItem value={true}>
+                                      {i18n.t("userModal.form.allTicketEnable")}
+                                    </MenuItem>
+                                    <MenuItem value={false}>
+                                      {i18n.t(
+                                        "userModal.form.allTicketDisable"
+                                      )}
+                                    </MenuItem>
+                                  </Field>
+                                </>
+                              </FormControl>
+                            </Grid>
+                          </Grid>
+
+                          <Grid container spacing={1}>
+                            <Grid item xs={12} md={6} xl={6}>
+                              <FormControl
+                                variant="outlined"
+                                className={classes.maxWidth}
+                                margin="dense"
+                                fullWidth
+                              >
+                                <>
+                                  <InputLabel>
+                                    {i18n.t("userModal.form.allHistoric")}
+                                  </InputLabel>
+
+                                  <Field
+                                    as={Select}
+                                    label={i18n.t("userModal.form.allHistoric")}
+                                    name="allHistoric"
+                                    type="allHistoric"
+                                    required
+                                  >
+                                    <MenuItem value="disabled">
+                                      {i18n.t(
+                                        "userModal.form.allHistoricDisabled"
+                                      )}
+                                    </MenuItem>
+                                    <MenuItem value="enabled">
+                                      {i18n.t(
+                                        "userModal.form.allHistoricEnabled"
+                                      )}
+                                    </MenuItem>
+                                  </Field>
+                                </>
+                              </FormControl>
+                            </Grid>
+                            <Grid item xs={12} md={6} xl={6}>
+                              <FormControl
+                                variant="outlined"
+                                className={classes.maxWidth}
+                                margin="dense"
+                                fullWidth
+                              >
+                                <>
+                                  <InputLabel>
+                                    {i18n.t("userModal.form.allUserChat")}
+                                  </InputLabel>
+
+                                  <Field
+                                    as={Select}
+                                    label={i18n.t("userModal.form.allUserChat")}
+                                    name="allUserChat"
+                                    type="allUserChat"
+                                    required
+                                  >
+                                    <MenuItem value="disabled">
+                                      {i18n.t(
+                                        "userModal.form.allHistoricDisabled"
+                                      )}
+                                    </MenuItem>
+                                    <MenuItem value="enabled">
+                                      {i18n.t(
+                                        "userModal.form.allHistoricEnabled"
+                                      )}
+                                    </MenuItem>
+                                  </Field>
+                                </>
+                              </FormControl>
+                            </Grid>
+                          </Grid>
+
+                          <Grid container spacing={1}>
+                            <Grid item xs={12} md={6} xl={6}>
+                              <FormControl
+                                variant="outlined"
+                                className={classes.maxWidth}
+                                margin="dense"
+                                fullWidth
+                              >
+                                <>
+                                  <InputLabel>
+                                    {i18n.t(
+                                      "userModal.form.userClosePendingTicket"
+                                    )}
+                                  </InputLabel>
+
+                                  <Field
+                                    as={Select}
+                                    label={i18n.t(
+                                      "userModal.form.userClosePendingTicket"
+                                    )}
+                                    name="userClosePendingTicket"
+                                    type="userClosePendingTicket"
+                                    required
+                                  >
+                                    <MenuItem value="disabled">
+                                      {i18n.t(
+                                        "userModal.form.allHistoricDisabled"
+                                      )}
+                                    </MenuItem>
+                                    <MenuItem value="enabled">
+                                      {i18n.t(
+                                        "userModal.form.allHistoricEnabled"
+                                      )}
+                                    </MenuItem>
+                                  </Field>
+                                </>
+                              </FormControl>
+                            </Grid>
+                            <Grid item xs={12} md={6} xl={6}>
+                              <FormControl
+                                variant="outlined"
+                                className={classes.maxWidth}
+                                margin="dense"
+                                fullWidth
+                              >
+                                <>
+                                  <InputLabel>
+                                    {i18n.t("userModal.form.allowSeeMessagesInPendingTickets")}
+                                  </InputLabel>
+
+                                  <Field
+                                    as={Select}
+                                    label={i18n.t("userModal.form.allowSeeMessagesInPendingTickets")}
+                                    name="allowSeeMessagesInPendingTickets"
+                                    type="allowSeeMessagesInPendingTickets"
+                                    required
+                                  >
+                                    <MenuItem value="disabled">
+                                      {i18n.t(
+                                        "userModal.form.allHistoricDisabled"
+                                      )}
+                                    </MenuItem>
+                                    <MenuItem value="enabled">
+                                      {i18n.t(
+                                        "userModal.form.allHistoricEnabled"
+                                      )}
+                                    </MenuItem>
+                                  </Field>
+                                </>
+                              </FormControl>
+                            </Grid>
+                          </Grid>
+
+                          <Grid container spacing={1}>
+                            <Grid item xs={12} md={6} xl={6}>
+                              <FormControl
+                                variant="outlined"
+                                className={classes.maxWidth}
+                                margin="dense"
+                                fullWidth
+                              >
+                                <>
+                                  <InputLabel>
+                                    {i18n.t("userModal.form.allowConnections")}
+                                  </InputLabel>
+
+                                  <Field
+                                    as={Select}
+                                    label={i18n.t(
+                                      "userModal.form.allowConnections"
+                                    )}
+                                    name="allowConnections"
+                                    type="allowConnections"
+                                    required
+                                  >
+                                    <MenuItem value="disabled">
+                                      {i18n.t(
+                                        "userModal.form.allHistoricDisabled"
+                                      )}
+                                    </MenuItem>
+                                    <MenuItem value="enabled">
+                                      {i18n.t(
+                                        "userModal.form.allHistoricEnabled"
+                                      )}
+                                    </MenuItem>
+                                  </Field>
+                                </>
+                              </FormControl>
+                            </Grid>
+                            <Grid item xs={12} md={6} xl={6}>
+                              <FormControl
+                                variant="outlined"
+                                className={classes.maxWidth}
+                                margin="dense"
+                                fullWidth
+                              >
+                                <>
+                                  <InputLabel>
+                                    {i18n.t("userModal.form.showDashboard")}
+                                  </InputLabel>
+
+                                  <Field
+                                    as={Select}
+                                    label={i18n.t(
+                                      "userModal.form.showDashboard"
+                                    )}
+                                    name="showDashboard"
+                                    type="showDashboard"
+                                    required
+                                  >
+                                    <MenuItem value="disabled">
+                                      {i18n.t(
+                                        "userModal.form.allHistoricDisabled"
+                                      )}
+                                    </MenuItem>
+                                    <MenuItem value="enabled">
+                                      {i18n.t(
+                                        "userModal.form.allHistoricEnabled"
+                                      )}
+                                    </MenuItem>
+                                  </Field>
+                                </>
+                              </FormControl>
+                            </Grid>
+                          </Grid>
+
+                          <Grid container spacing={1}>
+                            <Grid item xs={12} md={6} xl={6}>
+                              <FormControl
+                                variant="outlined"
+                                className={classes.maxWidth}
+                                margin="dense"
+                                fullWidth
+                              >
+                                <>
+                                  <InputLabel>
+                                    {i18n.t("userModal.form.allowRealTime")}
+                                  </InputLabel>
+
+                                  <Field
+                                    as={Select}
+                                    label={i18n.t(
+                                      "userModal.form.allowRealTime"
+                                    )}
+                                    name="allowRealTime"
+                                    type="allowRealTime"
+                                    required
+                                  >
+                                    <MenuItem value="disabled">
+                                      {i18n.t(
+                                        "userModal.form.allHistoricDisabled"
+                                      )}
+                                    </MenuItem>
+                                    <MenuItem value="enabled">
+                                      {i18n.t(
+                                        "userModal.form.allHistoricEnabled"
+                                      )}
+                                    </MenuItem>
+                                  </Field>
+                                </>
+                              </FormControl>
+                            </Grid>
+                            <Grid item xs={12} md={6} xl={6}>
+                              <FormControl
+                                variant="outlined"
+                                className={classes.maxWidth}
+                                margin="dense"
+                                fullWidth
+                              >
+                                <>
+                                  <InputLabel>
+                                    {i18n.t("userModal.form.showContacts")}
+                                  </InputLabel>
+
+                                  <Field
+                                    as={Select}
+                                    label={i18n.t(
+                                      "userModal.form.showContacts"
+                                    )}
+                                    name="showContacts"
+                                    type="showContacts"
+                                    required
+                                  >
+                                    <MenuItem value="disabled">
+                                      {i18n.t(
+                                        "userModal.form.allHistoricDisabled"
+                                      )}
+                                    </MenuItem>
+                                    <MenuItem value="enabled">
+                                      {i18n.t(
+                                        "userModal.form.allHistoricEnabled"
+                                      )}
+                                    </MenuItem>
+                                  </Field>
+                                </>
+                              </FormControl>
+                            </Grid>
+                          </Grid>
+
+                          <Grid container spacing={1}>
+                            <Grid item xs={12} md={6} xl={6}>
+                              <FormControl
+                                variant="outlined"
+                                className={classes.maxWidth}
+                                margin="dense"
+                                fullWidth
+                              >
+                                <>
+                                  <InputLabel>
+                                    {i18n.t("userModal.form.showCampaign")}
+                                  </InputLabel>
+
+                                  <Field
+                                    as={Select}
+                                    label={i18n.t(
+                                      "userModal.form.showCampaign"
+                                    )}
+                                    name="showCampaign"
+                                    type="showCampaign"
+                                    required
+                                  >
+                                    <MenuItem value="disabled">
+                                      {i18n.t(
+                                        "userModal.form.allHistoricDisabled"
+                                      )}
+                                    </MenuItem>
+                                    <MenuItem value="enabled">
+                                      {i18n.t(
+                                        "userModal.form.allHistoricEnabled"
+                                      )}
+                                    </MenuItem>
+                                  </Field>
+                                </>
+                              </FormControl>
+                            </Grid>
+                            <Grid item xs={12} md={6} xl={6}>
+                              <FormControl
+                                variant="outlined"
+                                className={classes.maxWidth}
+                                margin="dense"
+                                fullWidth
+                              >
+                                <>
+                                  <InputLabel>
+                                    {i18n.t("userModal.form.showFlow")}
+                                  </InputLabel>
+
+                                  <Field
+                                    as={Select}
+                                    label={i18n.t("userModal.form.showFlow")}
+                                    name="showFlow"
+                                    type="showFlow"
+                                    required
+                                  >
+                                    <MenuItem value="disabled">
+                                      {i18n.t(
+                                        "userModal.form.allHistoricDisabled"
+                                      )}
+                                    </MenuItem>
+                                    <MenuItem value="enabled">
+                                      {i18n.t(
+                                        "userModal.form.allHistoricEnabled"
+                                      )}
+                                    </MenuItem>
+                                  </Field>
+                                </>
+                              </FormControl>
+                            </Grid>
+                          </Grid>
+
+                          <Grid container spacing={1}>
+                            <Grid item xs={12} md={6} xl={6}>
+                              <FormControl
+                                variant="outlined"
+                                className={classes.maxWidth}
+                                margin="dense"
+                                fullWidth
+                              >
+                                <>
+                                  <InputLabel>
+                                    Finalização com Valor de Venda
+                                  </InputLabel>
+
+                                  <Field
+                                    as={Select}
+                                    label="Finalização com Valor de Venda"
+                                    name="finalizacaoComValorVendaAtiva"
+                                    type="finalizacaoComValorVendaAtiva"
+                                    required
+                                  >
+                                    <MenuItem value="false">
+                                      Desabilitado
+                                    </MenuItem>
+                                    <MenuItem value="true">Habilitado</MenuItem>
+                                  </Field>
+                                </>
+                              </FormControl>
+                            </Grid>
+                          </Grid>
+                        </>
+                      )}
+                    />
+                  </TabPanel>
+                </DialogContent>
+              </Paper>
+              <DialogActions>
+                <Button
+                  onClick={handleClose}
+                  color="secondary"
+                  disabled={isSubmitting}
+                  variant="outlined"
+                >
+                  {i18n.t("userModal.buttons.cancel")}
+                </Button>
+                <Button
+                  type="submit"
+                  color="primary"
+                  disabled={isSubmitting}
+                  variant="contained"
+                  className={classes.btnWrapper}
+                >
+                  {userId
+                    ? `${i18n.t("userModal.buttons.okEdit")}`
+                    : `${i18n.t("userModal.buttons.okAdd")}`}
+                  {isSubmitting && (
+                    <CircularProgress
+                      size={24}
+                      className={classes.buttonProgress}
+                    />
+                  )}
+                </Button>
+              </DialogActions>
+            </Form>
+          )}
+        </Formik>
+      </Dialog>
+    </div>
+  );
 };
 
 export default UserModal;

@@ -1,6 +1,7 @@
 import AppError from "../../errors/AppError";
 import Company from "../../models/Company";
 import Setting from "../../models/Setting";
+import User from "../../models/User";
 
 interface CompanyData {
   name: string;
@@ -12,11 +13,16 @@ interface CompanyData {
   campaignsEnabled?: boolean;
   dueDate?: string;
   recurrence?: string;
+  document?: string;
+  paymentMethod?: string;
+  password?: string;
+  generateInvoice?: boolean;
 }
 
 const UpdateCompanyService = async (
   companyData: CompanyData
 ): Promise<Company> => {
+
   const company = await Company.findByPk(companyData.id);
   const {
     name,
@@ -26,12 +32,40 @@ const UpdateCompanyService = async (
     planId,
     campaignsEnabled,
     dueDate,
-    recurrence
+    recurrence,
+    document,
+    paymentMethod,
+    password,
+    generateInvoice
   } = companyData;
 
   if (!company) {
     throw new AppError("ERR_NO_COMPANY_FOUND", 404);
   }
+
+  const existUser = await User.findOne({
+    where: {
+      companyId: company.id,
+      email: email
+    }
+  });
+
+  if (existUser && existUser.email !== company.email) {
+    throw new AppError("Usuário já existe com esse e-mail!", 404)
+  }
+
+  const user = await User.findOne({
+    where: {
+      companyId: company.id,
+      email: company.email
+    }
+  });
+
+  if (!user) {
+    throw new AppError("ERR_NO_USER_FOUND", 404)
+  }
+  
+  await user.update({ email, password });
 
   await company.update({
     name,
@@ -40,7 +74,10 @@ const UpdateCompanyService = async (
     status,
     planId,
     dueDate,
-    recurrence
+    recurrence,
+    document,
+    paymentMethod,
+    generateInvoice
   });
 
   if (companyData.campaignsEnabled !== undefined) {

@@ -17,24 +17,22 @@ const useStyles = makeStyles(theme => ({
 	chip: {
 		margin: 2,
 	},
-}));
+})); 
 
-const QueueSelectCustom = ({ selectedQueueIds, companyId, onChange }) => {
+const QueueSelectCustom = ({ selectedQueueIds, onChange }) => {
 	const classes = useStyles();
 	const [queues, setQueues] = useState([]);
 
 	useEffect(() => {
 		(async () => {
 			try {
-				const { data } = await api.get("/queue", {
-					params: { companyId }
-				});
+				const { data } = await api.get("/queue");
 				setQueues(data);
 			} catch (err) {
 				toastError(err);
 			}
 		})();
-	}, [companyId]);
+	}, []);
 
 	const handleChange = e => {
 		onChange(e.target.value);
@@ -64,6 +62,16 @@ const QueueSelectCustom = ({ selectedQueueIds, companyId, onChange }) => {
 						<div className={classes.chips}>
 							{selected?.length > 0 &&
 								selected.map(id => {
+									if (id === "0") {
+										return (
+											<Chip
+												key={id}
+												size="small"
+												label={i18n.t("queueSelect.withoutQueue")}
+												className={classes.chip}
+											/>
+										);
+									}
 									const queue = queues.find(q => q.id === id);
 									return queue ? (
 										<Chip
@@ -78,6 +86,9 @@ const QueueSelectCustom = ({ selectedQueueIds, companyId, onChange }) => {
 						</div>
 					)}
 				>
+					<MenuItem value="0">
+						{i18n.t("queueSelect.withoutQueue")}
+					</MenuItem>
 					{queues.map(queue => (
 						<MenuItem key={queue.id} value={queue.id}>
 							{queue.name}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useHistory } from "react-router-dom";
 import { has, isArray } from "lodash";
 
@@ -7,14 +7,20 @@ import { toast } from "react-toastify";
 import { i18n } from "../../translate/i18n";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
-import { SocketContext } from "../../context/Socket/SocketContext";
+import { socketConnection } from "../../services/socket";
 import moment from "moment";
+
 const useAuth = () => {
   const history = useHistory();
   const [isAuth, setIsAuth] = useState(false);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState({});
+  const [socket, setSocket] = useState(null);
+  
+  // Ref para manter referência dos listeners ativos
+  const listenersRef = useRef(new Set());
 
+  // Interceptors do API (mantém como estava)
   api.interceptors.request.use(
     (config) => {
       const token = localStorage.getItem("token");
@@ -29,80 +35,32 @@ const useAuth = () => {
     }
   );
 
-  let isRefreshing = false;
-  let failedRequestsQueue = [];
-
   api.interceptors.response.use(
     (response) => {
       return response;
     },
     async (error) => {
       const originalRequest = error.config;
-
       if (error?.response?.status === 403 && !originalRequest._retry) {
-        if (isRefreshing) {
-          return new Promise((resolve, reject) => {
-            failedRequestsQueue.push({ resolve, reject });
-          })
-            .then((token) => {
-              originalRequest.headers.Authorization = `Bearer ${token}`;
-              return api(originalRequest);
-            })
-            .catch((err) => {
-              return Promise.reject(err);
-            });
-        }
-
         originalRequest._retry = true;
-        isRefreshing = true;
 
-        try {
-          const { data } = await api.post("/auth/refresh_token");
-
-          if (data) {
-            localStorage.setItem("token", JSON.stringify(data.token));
-            api.defaults.headers.Authorization = `Bearer ${data.token}`;
-
-            failedRequestsQueue.forEach((request) => {
-              request.resolve(data.token);
-            });
-            failedRequestsQueue = [];
-          }
-
-          return api(originalRequest);
-        } catch (refreshError) {
-          failedRequestsQueue.forEach((request) => {
-            request.reject(refreshError);
-          });
-          failedRequestsQueue = [];
-
-          localStorage.removeItem("token");
-          localStorage.removeItem("companyId");
-          api.defaults.headers.Authorization = undefined;
-          setIsAuth(false);
-
-          return Promise.reject(refreshError);
-        } finally {
-          isRefreshing = false;
+        const { data } = await api.post("/auth/refresh_token");
+        if (data) {
+          localStorage.setItem("token", JSON.stringify(data.token));
+          api.defaults.headers.Authorization = `Bearer ${data.token}`;
         }
+        return api(originalRequest);
       }
-
-      if (
-        error?.response?.status === 401 ||
-        (error?.response?.status === 403 && originalRequest._retry)
-      ) {
+      if (error?.response?.status === 401) {
         localStorage.removeItem("token");
-        localStorage.removeItem("companyId");
         api.defaults.headers.Authorization = undefined;
         setIsAuth(false);
       }
-
       return Promise.reject(error);
     }
   );
 
-  const socketManager = useContext(SocketContext);
-
+  // Effect para inicialização do token
   useEffect(() => {
     const token = localStorage.getItem("token");
     (async () => {
@@ -111,7 +69,7 @@ const useAuth = () => {
           const { data } = await api.post("/auth/refresh_token");
           api.defaults.headers.Authorization = `Bearer ${data.token}`;
           setIsAuth(true);
-          setUser(data.user);
+          setUser(data.user || data);
         } catch (err) {
           toastError(err);
         }
@@ -120,22 +78,81 @@ const useAuth = () => {
     })();
   }, []);
 
+  // Effect para configuração do socket
   useEffect(() => {
-    const companyId = localStorage.getItem("companyId");
-    if (companyId) {
-      const socket = socketManager.getSocket(companyId);
+    if (Object.keys(user).length && user.id > 0) {
+      console.log("Configurando socket para user", user.id, "company", user.companyId);
+      
+      // Limpar listeners anteriores
+      if (socket) {
+        listenersRef.current.forEach(eventName => {
+          if (socket.off) {
+            socket.off(eventName);
+          }
+        });
+        listenersRef.current.clear();
+      }
 
-      socket.on(`company-${companyId}-user`, (data) => {
-        if (data.action === "update" && data.user.id === user.id) {
-          setUser(data.user);
-        }
+      // Criar nova conexão socket
+      const socketInstance = socketConnection({ user: {
+        companyId: user.companyId,
+        id: user.id }
       });
+      
+      if (socketInstance) {
+        setSocket(socketInstance);
 
-      return () => {
-        socket.disconnect();
-      };
+        // Aguardar um pouco para garantir que o socket está configurado
+        setTimeout(() => {
+          const eventName = `company-${user.companyId}-user`;
+          
+          const handleUserUpdate = (data) => {
+            if (data.action === "update" && data.user.id === user.id) {
+              setUser(data.user);
+            }
+          };
+
+          // Verificar se o socket tem o método 'on'
+          if (socketInstance && typeof socketInstance.on === 'function') {
+            socketInstance.on(eventName, handleUserUpdate);
+            listenersRef.current.add(eventName);
+            console.log(`Listener adicionado para: ${eventName}`);
+          } else {
+            console.error("Socket instance não tem método 'on'", socketInstance);
+          }
+        }, 100);
+      }
     }
-  }, [socketManager, user]);
+
+    // Cleanup function
+    return () => {
+      if (socket && listenersRef.current.size > 0) {
+        console.log("Limpando listeners do socket para user", user.id);
+        listenersRef.current.forEach(eventName => {
+          if (socket.off) {
+            socket.off(eventName);
+          }
+        });
+        listenersRef.current.clear();
+      }
+    };
+  }, [user.id, user.companyId]); // Dependências específicas
+
+  // Effect para buscar dados do usuário atual
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const { data } = await api.get("/auth/me");
+        setUser(data.user || data);
+      } catch (err) {
+        console.log("Erro ao buscar usuário atual:", err);
+      }
+    };
+    
+    if (isAuth) {
+      fetchCurrentUser();
+    }
+  }, [isAuth]);
 
   const handleLogin = async (userData) => {
     setLoading(true);
@@ -143,37 +160,66 @@ const useAuth = () => {
     try {
       const { data } = await api.post("/auth/login", userData);
       const {
-        user: { companyId, id, company },
+        user: { company },
       } = data;
 
-      if (has(company, "settings") && isArray(company.settings)) {
-        const setting = company.settings.find(
+      // Lógica de configurações da empresa (mantém como estava)
+      if (
+        has(company, "companieSettings") &&
+        isArray(company.companieSettings[0])
+      ) {
+        const setting = company.companieSettings[0].find(
           (s) => s.key === "campaignsEnabled"
         );
         if (setting && setting.value === "true") {
-          localStorage.setItem("cshow", null); //regra pra exibir campanhas
+          localStorage.setItem("cshow", null);
         }
       }
 
+      if (
+        has(company, "companieSettings") &&
+        isArray(company.companieSettings[0])
+      ) {
+        const setting = company.companieSettings[0].find(
+          (s) => s.key === "sendSignMessage"
+        );
+
+        const signEnable = setting.value === "enable";
+
+        if (setting && setting.value === "enabled") {
+          localStorage.setItem("sendSignMessage", signEnable);
+        }
+      }
+      
+      localStorage.setItem("profileImage", data.user.profileImage);
+
       moment.locale("pt-br");
-      const dueDate = data.user.company.dueDate;
+      let dueDate;
+      if (data.user.company.id === 1) {
+        dueDate = "2999-12-31T00:00:00.000Z";
+      } else {
+        dueDate = data.user.company.dueDate;
+      }
+      
       const hoje = moment(moment()).format("DD/MM/yyyy");
       const vencimento = moment(dueDate).format("DD/MM/yyyy");
 
-      var diff = moment(dueDate).diff(moment(moment()).format());
-
-      var before = moment(moment().format()).isBefore(dueDate);
-      var dias = moment.duration(diff).asDays();
+      // Comparar apenas as datas (sem horas) para permitir acesso até 23h59 do dia do vencimento
+      const hojeInicio = moment().startOf('day');
+      const vencimentoInicio = moment(dueDate).startOf('day');
+      
+      var diff = vencimentoInicio.diff(hojeInicio, 'days');
+      var before = hojeInicio.isSameOrBefore(vencimentoInicio, 'day');
+      var dias = diff;
 
       if (before === true) {
         localStorage.setItem("token", JSON.stringify(data.token));
-        localStorage.setItem("companyId", companyId);
-        localStorage.setItem("userId", id);
         localStorage.setItem("companyDueDate", vencimento);
         api.defaults.headers.Authorization = `Bearer ${data.token}`;
-        setUser(data.user);
+        setUser(data.user || data);
         setIsAuth(true);
         toast.success(i18n.t("auth.toasts.success"));
+        
         if (Math.round(dias) < 5) {
           toast.warn(
             `Sua assinatura vence em ${Math.round(dias)} ${
@@ -181,15 +227,17 @@ const useAuth = () => {
             } `
           );
         }
+
         history.push("/tickets");
         setLoading(false);
       } else {
+        api.defaults.headers.Authorization = `Bearer ${data.token}`;
+        setIsAuth(true);
         toastError(`Opss! Sua assinatura venceu ${vencimento}.
 Entre em contato com o Suporte para mais informações! `);
+        history.push("/financeiro-aberto");
         setLoading(false);
       }
-
-      //quebra linha
     } catch (err) {
       toastError(err);
       setLoading(false);
@@ -200,12 +248,25 @@ Entre em contato com o Suporte para mais informações! `);
     setLoading(true);
 
     try {
+      // Limpar socket antes do logout
+      if (socket) {
+        listenersRef.current.forEach(eventName => {
+          if (socket.off) {
+            socket.off(eventName);
+          }
+        });
+        listenersRef.current.clear();
+        
+        if (typeof socket.disconnect === 'function') {
+          socket.disconnect();
+        }
+      }
+
       await api.delete("/auth/logout");
       setIsAuth(false);
       setUser({});
+      setSocket(null);
       localStorage.removeItem("token");
-      localStorage.removeItem("companyId");
-      localStorage.removeItem("userId");
       localStorage.removeItem("cshow");
       api.defaults.headers.Authorization = undefined;
       setLoading(false);
@@ -219,9 +280,10 @@ Entre em contato com o Suporte para mais informações! `);
   const getCurrentUserInfo = async () => {
     try {
       const { data } = await api.get("/auth/me");
+      console.log(data);
       return data;
-    } catch (err) {
-      toastError(err);
+    } catch (_) {
+      return null;
     }
   };
 
@@ -232,6 +294,7 @@ Entre em contato com o Suporte para mais informações! `);
     handleLogin,
     handleLogout,
     getCurrentUserInfo,
+    socket,
   };
 };
 
